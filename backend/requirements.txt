@@ -4,3 +4,4 @@ lxml
 python-dateutil
 python-dotenv
 schedule
+playwright>=1.48.0

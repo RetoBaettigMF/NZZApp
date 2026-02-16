@@ -36,36 +36,132 @@ class NZZScraper:
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         })
+        self.use_browser = False
+        self.browser = None
+        self.browser_context = None
+        self.browser_page = None
+        self.playwright = None
         
-    def login(self):
-        """Login bei NZZ."""
-        print("→ Login bei NZZ...")
-        
-        # Zuerst die Login-Seite laden
-        login_url = "https://login.nzz.ch/"
-        resp = self.session.get(login_url)
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        
-        # Login-Formular finden und absenden
-        login_data = {
-            'email': self.email,
-            'password': self.password,
-        }
-        
-        # CSRF Token extrahieren falls vorhanden
-        csrf = soup.find('input', {'name': '_csrf'})
-        if csrf:
-            login_data['_csrf'] = csrf.get('value')
-        
-        resp = self.session.post(login_url, data=login_data, allow_redirects=True)
-        
-        if 'abmelden' in resp.text.lower() or resp.status_code == 200:
-            print("✓ Login erfolgreich")
+    def login_with_browser(self):
+        """Login using Playwright browser automation and return browser context."""
+        from playwright.sync_api import sync_playwright
+
+        print("→ Starte Browser für Authentifizierung...")
+
+        # Start Playwright and keep it alive
+        self.playwright = sync_playwright().start()
+        browser = self.playwright.chromium.launch(headless=True)
+        context = browser.new_context()
+        page = context.new_page()
+
+        try:
+            # Navigate to NZZ
+            page.goto('https://www.nzz.ch', timeout=30000)
+
+            # Accept cookie consent if it appears
+            try:
+                page.click('text=Alle Anbieter akzeptieren', timeout=5000)
+            except:
+                pass  # No cookie consent dialog
+
+            # Click login button
+            page.click('text=Anmelden', timeout=10000)
+
+            # Wait for Piano iframe to load
+            page.wait_for_timeout(3000)
+
+            # Find the Piano iframe
+            login_frame = None
+            for frame in page.frames:
+                if 'piano.io' in frame.url:
+                    login_frame = frame
+                    break
+
+            if not login_frame:
+                raise Exception("Could not find Piano login iframe")
+
+            # Wait for inputs to be ready
+            login_frame.wait_for_selector('input[type="text"]', timeout=10000)
+
+            # Fill credentials in iframe
+            login_frame.fill('input[type="text"]', self.email)
+            login_frame.fill('input[type="password"]', self.password)
+
+            # Submit form
+            login_frame.click('button[type="submit"]')
+
+            # Wait for login to complete (iframe closes)
+            page.wait_for_timeout(5000)
+
+            print(f"✓ Browser-Session authentifiziert")
+
+            # Store browser context for article scraping
+            self.browser = browser
+            self.browser_context = context
+            self.browser_page = page
+
             return True
-        else:
-            print("✗ Login fehlgeschlagen")
-            return False
+
+        except Exception as e:
+            print(f"✗ Browser-Login fehlgeschlagen: {e}")
+            page.screenshot(path='login_error.png')
+            browser.close()
+            self.playwright.stop()
+            raise
+
+    def login(self):
+        """Login bei NZZ mit Browser-Automation."""
+        if not self.email or not self.password:
+            print("ℹ Keine Login-Daten konfiguriert - fahre ohne Authentifizierung fort")
+            self.use_browser = False
+            return True  # Continue with public scraping
+
+        print("→ Authentifiziere mit NZZ...")
+
+        try:
+            # Perform browser-based login and keep browser alive
+            self.login_with_browser()
+            self.use_browser = True
+            print("✓ Login erfolgreich - vollständiger Zugriff auf Artikel")
+            return True
+
+        except Exception as e:
+            print(f"✗ Login-Fehler: {e}")
+            print("ℹ Fahre mit öffentlichen Artikeln fort")
+            self.use_browser = False
+            return True  # Graceful fallback
+
+    def cleanup_browser(self):
+        """Close browser and cleanup resources."""
+        if hasattr(self, 'browser') and self.browser:
+            try:
+                self.browser.close()
+                self.playwright.stop()
+                print("✓ Browser-Session beendet")
+            except:
+                pass
     
+    def is_paywalled(self, soup):
+        """Detect if article content is behind paywall."""
+        # Piano paywall indicators
+        paywall_indicators = [
+            soup.find(id=re.compile('piano.*paywall', re.I)),
+            soup.find(class_=re.compile('paywall|subscribe-wall', re.I)),
+            'Abonnieren Sie' in soup.get_text(),
+            'Jetzt abonnieren' in soup.get_text()
+        ]
+
+        return any(paywall_indicators)
+
+    def validate_content_length(self, content, url):
+        """Check if content seems complete."""
+        min_length = 500  # Typical NZZ article
+
+        if len(content) < min_length:
+            print(f"    ⚠ Kurzer Inhalt ({len(content)} Zeichen) - möglicherweise unvollständig")
+            return False
+        return True
+
     def extract_category(self, article_soup, url):
         """Extrahiert die Kategorie aus dem Artikel."""
         # Versuche aus Breadcrumbs oder Meta-Tags zu lesen
@@ -126,8 +222,103 @@ class NZZScraper:
         
         return '\n'.join(md_lines)
     
+    def scrape_article_with_browser(self, url):
+        """Scrapt einen einzelnen Artikel mit Browser-Session."""
+        try:
+            # Use existing browser page
+            page = self.browser_page
+            page.goto(url, timeout=30000)
+
+            # Wait for article content to load
+            try:
+                page.wait_for_selector('article, main', timeout=5000)
+            except:
+                pass  # Continue anyway
+
+            # Brief wait for dynamic content
+            page.wait_for_timeout(2000)
+
+            # Get page HTML
+            html = page.content()
+            soup = BeautifulSoup(html, 'html.parser')
+
+            # Titel extrahieren
+            title_tag = soup.find('h1') or soup.find('title')
+            title = title_tag.get_text(strip=True) if title_tag else "Unbekannter Titel"
+
+            # Datum extrahieren
+            date = datetime.now()
+            time_tag = soup.find('time')
+            if time_tag and time_tag.get('datetime'):
+                try:
+                    date = date_parser.parse(time_tag['datetime'])
+                except:
+                    pass
+
+            # Artikel-Content finden - NZZ-specific selectors first
+            article = None
+
+            # Try NZZ-specific content selectors
+            content_selectors = [
+                'article',
+                '[class*="articleContent"]',
+                '[class*="article-content"]',
+                '[class*="ArticleContent"]',
+                'main [class*="content"]',
+                'main',
+                '[role="main"]',
+                'div[class*="article"]'
+            ]
+
+            for selector in content_selectors:
+                article = soup.select_one(selector)
+                if article and len(article.get_text(strip=True)) > 200:
+                    break
+
+            if not article:
+                article = soup.find('body')
+
+            # Bilder entfernen
+            for img in article.find_all('img'):
+                img.decompose()
+            for figure in article.find_all('figure'):
+                figure.decompose()
+            # Remove ads and other noise
+            for elem in article.find_all(class_=re.compile('ad-|advertisement|paywall|subscribe', re.I)):
+                elem.decompose()
+
+            # Content zu Markdown
+            content = self.html_to_markdown(article)
+            content = self.clean_text(content)
+
+            # Kategorie bestimmen
+            category = self.extract_category(soup, url)
+
+            # Add paywall detection
+            if self.is_paywalled(soup):
+                print(f"    ⚠ Paywall erkannt auf {url}")
+
+            # Validate content length
+            self.validate_content_length(content, url)
+
+            return {
+                'title': title,
+                'url': url,
+                'date': date.isoformat(),
+                'category': category,
+                'content': content
+            }
+
+        except Exception as e:
+            print(f"✗ Fehler beim Scrapen von {url}: {e}")
+            return None
+
     def scrape_article(self, url):
         """Scrapt einen einzelnen Artikel."""
+        # Use browser if available, otherwise fall back to requests
+        if hasattr(self, 'use_browser') and self.use_browser:
+            return self.scrape_article_with_browser(url)
+
         try:
             resp = self.session.get(url, timeout=30)
             resp.raise_for_status()
@@ -163,7 +354,14 @@ class NZZScraper:
             
             # Kategorie bestimmen
             category = self.extract_category(soup, url)
-            
+
+            # Add paywall detection
+            if self.is_paywalled(soup):
+                print(f"    ⚠ Paywall erkannt auf {url}")
+
+            # Validate content length
+            self.validate_content_length(content, url)
+
             return {
                 'title': title,
                 'url': url,
@@ -298,10 +496,14 @@ class NZZScraper:
             json.dump(manifest, f, indent=2)
         
         print(f"✓ Manifest erstellt: {manifest_path}")
+
+        # Cleanup browser if used
+        self.cleanup_browser()
+
         print(f"\n{'='*50}")
         print("✓ Scraping abgeschlossen!")
         print(f"{'='*50}\n")
-        
+
         return True
 
 
