@@ -13,6 +13,8 @@ function ArticleReader({ articles, onArticlesUpdate }) {
     return saved ? JSON.parse(saved) : null
   })
 
+  const currentArticle = articles[currentIndex]
+
   // Speichere markierte Artikel
   useEffect(() => {
     localStorage.setItem('nzz_saved_articles', JSON.stringify(savedArticles))
@@ -32,8 +34,6 @@ function ArticleReader({ articles, onArticlesUpdate }) {
       localStorage.setItem('nzz_last_read_position', JSON.stringify(position))
     }
   }, [currentIndex, currentArticle])
-
-  const currentArticle = articles[currentIndex]
 
   const handleNext = useCallback(() => {
     if (currentIndex < articles.length - 1) {
