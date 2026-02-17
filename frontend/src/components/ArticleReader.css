@@ -209,15 +209,34 @@
   margin-top: 1rem;
 }
 
+.control-btn.jump-last {
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.2), rgba(255, 140, 0, 0.2));
+  color: #ffd700;
+  border: 1px solid rgba(255, 215, 0, 0.4);
+  font-weight: 500;
+}
+
+.control-btn.jump-last:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.3), rgba(255, 140, 0, 0.3));
+  transform: translateY(-2px);
+}
+
+.control-btn.jump-last:disabled {
+  opacity: 0.3;
+  color: rgba(255, 215, 0, 0.4);
+  border-color: transparent;
+  cursor: not-allowed;
+}
+
 @media (max-width: 600px) {
   .article-card {
     padding: 1rem;
   }
-  
+
   .article-title {
     font-size: 1.2rem;
   }
-  
+
   .control-btn {
     padding: 0.6rem 0.8rem;
     font-size: 0.8rem;

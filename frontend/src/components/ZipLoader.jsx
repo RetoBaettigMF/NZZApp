@@ -95,23 +95,51 @@ function ZipLoader({ onArticlesLoaded, onLoading, onError }) {
 
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i]
-        
+
         if (line.startsWith('# ') && !title) {
           title = line.substring(2).trim()
         } else if (line.includes('Datum:')) {
-          date = line.split('Datum:')[1].trim()
+          // Extrahiere Datum (mit oder ohne Bold-Markdown)
+          const datumMatch = line.match(/\*?\*?Datum:\*?\*?\s*(.+)/)
+          if (datumMatch) {
+            date = datumMatch[1].trim()
+          }
         } else if (line.includes('Kategorie:')) {
-          category = line.split('Kategorie:')[1].trim()
-        } else if (line.includes('URL:')) {
-          url = line.split('URL:')[1].trim()
+          // Extrahiere Kategorie (mit oder ohne Bold-Markdown)
+          const katMatch = line.match(/\*?\*?Kategorie:\*?\*?\s*(.+)/)
+          if (katMatch) {
+            category = katMatch[1].trim()
+          }
+        } else if (line.includes('Original auf NZZ.ch öffnen') || line.includes('URL:')) {
+          // Extrahiere URL aus Markdown-Link: [Text](URL)
+          const urlMatch = line.match(/\[.*?\]\((https?:\/\/[^\)]+)\)/)
+          if (urlMatch) {
+            url = urlMatch[1].trim()
+          } else if (line.includes('URL:')) {
+            url = line.split('URL:')[1].trim()
+          }
         } else if (line.startsWith('---')) {
           bodyStart = i + 1
           break
         }
       }
 
-      const body = lines.slice(bodyStart).join('\n')
-      
+      // Body extrahieren und ersten Titel entfernen
+      let bodyLines = lines.slice(bodyStart)
+
+      // Entferne ersten Markdown-Titel (# Titel) falls vorhanden
+      // Backend sendet immer "# Titel" als erste Zeile nach dem Separator
+      if (bodyLines.length > 0 && bodyLines[0].trim().startsWith('# ')) {
+        bodyLines.shift() // Entferne erste Zeile
+      }
+
+      // Entferne leere Zeilen am Anfang
+      while (bodyLines.length > 0 && bodyLines[0].trim() === '') {
+        bodyLines.shift()
+      }
+
+      const body = bodyLines.join('\n')
+
       // Konvertiere Markdown zu HTML (einfache Version)
       const htmlContent = body
         .replace(/^## (.*$)/gim, '<h2>$1</h2>')

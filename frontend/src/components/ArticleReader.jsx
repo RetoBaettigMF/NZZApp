@@ -8,11 +8,30 @@ function ArticleReader({ articles, onArticlesUpdate }) {
     return saved ? JSON.parse(saved) : []
   })
   const [direction, setDirection] = useState(null)
+  const [lastReadPosition, setLastReadPosition] = useState(() => {
+    const saved = localStorage.getItem('nzz_last_read_position')
+    return saved ? JSON.parse(saved) : null
+  })
 
   // Speichere markierte Artikel
   useEffect(() => {
     localStorage.setItem('nzz_saved_articles', JSON.stringify(savedArticles))
   }, [savedArticles])
+
+  // Speichere aktuelle Leseposition bei jedem Artikel-Wechsel
+  useEffect(() => {
+    if (currentArticle) {
+      const position = {
+        articleId: currentArticle.id,
+        date: currentArticle.date,
+        category: currentArticle.category,
+        timestamp: Date.now(),
+        index: currentIndex
+      }
+      setLastReadPosition(position)
+      localStorage.setItem('nzz_last_read_position', JSON.stringify(position))
+    }
+  }, [currentIndex, currentArticle])
 
   const currentArticle = articles[currentIndex]
 
@@ -97,7 +116,20 @@ function ArticleReader({ articles, onArticlesUpdate }) {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [handleNext, handlePrevious, toggleSave])
+  }, [handleNext, handlePrevious, toggleSave, jumpToLastRead])
+
+  const jumpToLastRead = useCallback(() => {
+    if (!lastReadPosition) return
+
+    // Finde Artikel anhand ID
+    const targetIndex = articles.findIndex(a => a.id === lastReadPosition.articleId)
+
+    if (targetIndex !== -1) {
+      setCurrentIndex(targetIndex)
+    } else {
+      alert('Letzter Artikel nicht mehr verfügbar (möglicherweise gefiltert oder gelöscht)')
+    }
+  }, [articles, lastReadPosition])
 
   const deleteCurrentArticle = () => {
     const updatedArticles = articles.filter((_, idx) => idx !== currentIndex)
@@ -173,12 +205,21 @@ function ArticleReader({ articles, onArticlesUpdate }) {
       </div>
 
       <div className="article-controls">
-        <button 
+        <button
           className="control-btn prev"
           onClick={handlePrevious}
           disabled={currentIndex === 0}
         >
           ← Zurück
+        </button>
+
+        <button
+          className="control-btn jump-last"
+          onClick={jumpToLastRead}
+          disabled={!lastReadPosition || lastReadPosition.articleId === currentArticle?.id}
+          title="Zur letzten Leseposition springen"
+        >
+          📍 Letzte Position
         </button>
 
         <button 
