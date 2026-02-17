@@ -11,6 +11,8 @@ function App() {
   const [currentDate, setCurrentDate] = useState('all')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [availableServerDates, setAvailableServerDates] = useState([])
+  const [loadDateFunc, setLoadDateFunc] = useState(null)
 
   // Lade Artikel aus LocalStorage beim Start
   useEffect(() => {
@@ -38,6 +40,25 @@ function App() {
 
   const handleArticleUpdate = (updatedArticles) => {
     setArticles(updatedArticles)
+  }
+
+  const handleDateChange = async (newDate) => {
+    setCurrentDate(newDate)
+
+    // Prüfe ob Artikel für dieses Datum bereits lokal vorhanden sind
+    const articlesForDate = articles.filter(a => {
+      try {
+        const articleDate = new Date(a.date).toISOString().split('T')[0]
+        return articleDate === newDate
+      } catch {
+        return false
+      }
+    })
+
+    // Wenn keine Artikel lokal vorhanden, vom Server laden
+    if (articlesForDate.length === 0 && loadDateFunc) {
+      await loadDateFunc(newDate)
+    }
   }
 
   // Extrahiere einzigartige Daten aus Artikeln
@@ -80,10 +101,12 @@ function App() {
     <div className="app">
       <header className="app-header">
         <h1>📰 NZZ Reader</h1>
-        <ZipLoader 
+        <ZipLoader
           onArticlesLoaded={handleArticlesLoaded}
           onLoading={setIsLoading}
           onError={setError}
+          onAvailableDatesLoaded={setAvailableServerDates}
+          onLoadDateReady={(func) => setLoadDateFunc(() => func)}
         />
       </header>
 
@@ -103,8 +126,9 @@ function App() {
       {articles.length > 0 && availableDates.length > 0 && (
         <DateNavigator
           availableDates={availableDates}
+          availableServerDates={availableServerDates}
           currentDate={currentDate}
-          onDateChange={setCurrentDate}
+          onDateChange={handleDateChange}
         />
       )}
 

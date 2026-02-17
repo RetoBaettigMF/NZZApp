@@ -1,20 +1,23 @@
 import { useState } from 'react'
 import './DateNavigator.css'
 
-function DateNavigator({ availableDates, currentDate, onDateChange }) {
-  const currentIndex = availableDates.indexOf(currentDate)
+function DateNavigator({ availableDates, availableServerDates, currentDate, onDateChange }) {
+  // Verwende Server-Daten wenn verfügbar, sonst lokale Daten
+  const allDates = availableServerDates.length > 0 ? availableServerDates : availableDates
+
+  const currentIndex = allDates.indexOf(currentDate)
   const hasPrevious = currentIndex > 0
-  const hasNext = currentIndex < availableDates.length - 1
+  const hasNext = currentIndex < allDates.length - 1
 
   const handlePrevious = () => {
     if (hasPrevious) {
-      onDateChange(availableDates[currentIndex - 1])
+      onDateChange(allDates[currentIndex - 1])
     }
   }
 
   const handleNext = () => {
     if (hasNext) {
-      onDateChange(availableDates[currentIndex + 1])
+      onDateChange(allDates[currentIndex + 1])
     }
   }
 
@@ -28,7 +31,7 @@ function DateNavigator({ availableDates, currentDate, onDateChange }) {
     })
   }
 
-  if (availableDates.length === 0) return null
+  if (allDates.length === 0) return null
 
   return (
     <div className="date-navigator">

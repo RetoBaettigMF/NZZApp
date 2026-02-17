@@ -4,15 +4,94 @@ import './ZipLoader.css'
 
 const API_BASE = '/api'
 
-function ZipLoader({ onArticlesLoaded, onLoading, onError }) {
+function ZipLoader({ onArticlesLoaded, onLoading, onError, onAvailableDatesLoaded, onLoadDateReady }) {
   const [lastUpdate, setLastUpdate] = useState(() => {
     return localStorage.getItem('nzz_last_update') || null
   })
 
   // Automatisch beim Start laden
   useEffect(() => {
+    loadAvailableDates()
     loadLatestArticles()
   }, [])
+
+  // Exportiere loadArticlesByDate Funktion
+  useEffect(() => {
+    if (onLoadDateReady) {
+      onLoadDateReady(loadArticlesByDate)
+    }
+  }, [])
+
+  const loadAvailableDates = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/list`)
+      if (!response.ok) return
+
+      const data = await response.json()
+      const dates = data.archives.map(archive => archive.date)
+      if (onAvailableDatesLoaded) {
+        onAvailableDatesLoaded(dates)
+      }
+    } catch (err) {
+      console.error('Fehler beim Laden der verfügbaren Daten:', err)
+    }
+  }
+
+  const loadArticlesByDate = async (dateString) => {
+    onLoading(true)
+    onError(null)
+
+    try {
+      const downloadUrl = `/api/download/${dateString}`
+      const zipResponse = await fetch(downloadUrl)
+      if (!zipResponse.ok) {
+        throw new Error('ZIP konnte nicht geladen werden')
+      }
+
+      const zipBlob = await zipResponse.blob()
+      const zip = await JSZip.loadAsync(zipBlob)
+
+      const articles = []
+      const promises = []
+
+      zip.forEach((relativePath, zipEntry) => {
+        if (relativePath.endsWith('.md') && !relativePath.includes('manifest')) {
+          promises.push(
+            zipEntry.async('text').then(content => {
+              const article = parseMarkdown(content, relativePath)
+              if (article) articles.push(article)
+            })
+          )
+        }
+      })
+
+      await Promise.all(promises)
+      articles.sort((a, b) => new Date(b.date) - new Date(a.date))
+
+      // Merge mit existierenden Artikeln
+      const existingArticles = JSON.parse(localStorage.getItem('nzz_articles') || '[]')
+      const mergedArticles = [...articles]
+
+      // Füge Artikel hinzu die noch nicht vorhanden sind
+      existingArticles.forEach(existing => {
+        if (!mergedArticles.find(a => a.id === existing.id)) {
+          mergedArticles.push(existing)
+        }
+      })
+
+      mergedArticles.sort((a, b) => new Date(b.date) - new Date(a.date))
+
+      // Speichere mit LocalStorage-Management
+      saveToLocalStorage('nzz_articles', JSON.stringify(mergedArticles))
+      onArticlesLoaded(mergedArticles)
+
+    } catch (err) {
+      console.error('Fehler beim Laden:', err)
+      onError('Konnte Artikel nicht laden.')
+    } finally {
+      onLoading(false)
+    }
+  }
 
   const loadLatestArticles = async () => {
     onLoading(true)
@@ -35,7 +114,7 @@ function ZipLoader({ onArticlesLoaded, onLoading, onError }) {
       }
 
       const data = await response.json()
-      
+
       // Prüfe ob neuer als lokale Daten
       if (lastUpdate === data.date && localArticles) {
         onLoading(false)
@@ -43,43 +122,49 @@ function ZipLoader({ onArticlesLoaded, onLoading, onError }) {
       }
 
       // Lade ZIP
-      const zipResponse = await fetch(data.download_url)
-      if (!zipResponse.ok) {
-        throw new Error('ZIP konnte nicht geladen werden')
-      }
-
-      const zipBlob = await zipResponse.blob()
-      const zip = await JSZip.loadAsync(zipBlob)
-
-      // Extrahiere Markdown-Dateien
-      const articles = []
-      const promises = []
-
-      zip.forEach((relativePath, zipEntry) => {
-        if (relativePath.endsWith('.md') && !relativePath.includes('manifest')) {
-          promises.push(
-            zipEntry.async('text').then(content => {
-              const article = parseMarkdown(content, relativePath)
-              if (article) articles.push(article)
-            })
-          )
-        }
-      })
-
-      await Promise.all(promises)
-
-      // Sortiere nach Datum (neueste zuerst)
-      articles.sort((a, b) => new Date(b.date) - new Date(a.date))
-
-      onArticlesLoaded(articles)
-      localStorage.setItem('nzz_last_update', data.date)
+      await loadArticlesByDate(data.date)
       setLastUpdate(data.date)
+      saveToLocalStorage('nzz_last_update', data.date)
 
     } catch (err) {
       console.error('Fehler beim Laden:', err)
       onError('Konnte keine neuen Artikel laden. Offline-Modus aktiv.')
     } finally {
       onLoading(false)
+    }
+  }
+
+  const saveToLocalStorage = (key, value) => {
+    try {
+      localStorage.setItem(key, value)
+    } catch (e) {
+      if (e.name === 'QuotaExceededError') {
+        console.warn('LocalStorage voll - lösche älteste Artikel')
+        cleanupOldArticles()
+        try {
+          localStorage.setItem(key, value)
+        } catch (e2) {
+          console.error('LocalStorage immer noch voll nach Cleanup:', e2)
+          onError('Speicher voll - bitte Cache leeren')
+        }
+      }
+    }
+  }
+
+  const cleanupOldArticles = () => {
+    try {
+      const articles = JSON.parse(localStorage.getItem('nzz_articles') || '[]')
+      if (articles.length === 0) return
+
+      // Sortiere nach Datum und behalte nur die neuesten 50%
+      articles.sort((a, b) => new Date(b.date) - new Date(a.date))
+      const keepCount = Math.max(Math.floor(articles.length / 2), 10)
+      const reducedArticles = articles.slice(0, keepCount)
+
+      localStorage.setItem('nzz_articles', JSON.stringify(reducedArticles))
+      console.log(`Cleaned up: ${articles.length} → ${reducedArticles.length} Artikel`)
+    } catch (e) {
+      console.error('Fehler beim Cleanup:', e)
     }
   }
 
