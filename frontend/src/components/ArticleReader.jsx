@@ -57,7 +57,7 @@ function ArticleReader({ articles, onArticlesUpdate }) {
 
   const toggleSave = useCallback(() => {
     if (!currentArticle) return
-    
+
     const articleId = currentArticle.id || currentArticle.url
     setSavedArticles(prev => {
       if (prev.includes(articleId)) {
@@ -67,6 +67,19 @@ function ArticleReader({ articles, onArticlesUpdate }) {
       }
     })
   }, [currentArticle])
+
+  const jumpToLastRead = useCallback(() => {
+    if (!lastReadPosition) return
+
+    // Finde Artikel anhand ID
+    const targetIndex = articles.findIndex(a => a.id === lastReadPosition.articleId)
+
+    if (targetIndex !== -1) {
+      setCurrentIndex(targetIndex)
+    } else {
+      alert('Letzter Artikel nicht mehr verfügbar (möglicherweise gefiltert oder gelöscht)')
+    }
+  }, [articles, lastReadPosition])
 
   const isSaved = currentArticle && savedArticles.includes(currentArticle.id || currentArticle.url)
 
@@ -117,19 +130,6 @@ function ArticleReader({ articles, onArticlesUpdate }) {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [handleNext, handlePrevious, toggleSave, jumpToLastRead])
-
-  const jumpToLastRead = useCallback(() => {
-    if (!lastReadPosition) return
-
-    // Finde Artikel anhand ID
-    const targetIndex = articles.findIndex(a => a.id === lastReadPosition.articleId)
-
-    if (targetIndex !== -1) {
-      setCurrentIndex(targetIndex)
-    } else {
-      alert('Letzter Artikel nicht mehr verfügbar (möglicherweise gefiltert oder gelöscht)')
-    }
-  }, [articles, lastReadPosition])
 
   const deleteCurrentArticle = () => {
     const updatedArticles = articles.filter((_, idx) => idx !== currentIndex)
