@@ -469,15 +469,74 @@ class NZZScraper:
             print(f"✗ Fehler beim Scrapen von {url}: {e}")
             return None
     
+    def get_article_links_with_browser(self):
+        """Holt Artikel-Links mit Browser und Scrolling für lazy-loaded content."""
+        print(f"→ Lade Artikel-Liste von {self.base_url} (mit Scrolling)...")
+
+        try:
+            page = self.browser_page
+            page.goto(self.base_url, timeout=30000)
+
+            # Wait for initial content
+            try:
+                page.wait_for_selector('a[href]', timeout=5000)
+            except:
+                pass
+
+            links = set()
+            pages_to_scroll = 10
+
+            print(f"→ Scrolle durch {pages_to_scroll} Seiten für lazy-loaded Artikel...")
+
+            for i in range(pages_to_scroll):
+                # Scroll to bottom
+                page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
+
+                # Wait for new content to load
+                page.wait_for_timeout(2000)  # 2 seconds between scrolls
+
+                # Extract links from current page state
+                html = page.content()
+                soup = BeautifulSoup(html, 'html.parser')
+
+                new_links_count = 0
+                for a in soup.find_all('a', href=True):
+                    href = a['href']
+                    # NZZ Artikel-URLs haben das Format /[kategorie]/[slug].[id]
+                    if re.match(r'^/[\w-]+/[\w-]+\.\d+$', href):
+                        full_url = urljoin('https://www.nzz.ch', href)
+                        if full_url not in links:
+                            new_links_count += 1
+                            links.add(full_url)
+
+                print(f"    Seite {i+1}/{pages_to_scroll}: {new_links_count} neue Links gefunden (Total: {len(links)})")
+
+                # Stop if no new links found after scrolling
+                if i > 2 and new_links_count == 0:
+                    print(f"    → Keine neuen Links mehr, stoppe früher")
+                    break
+
+            print(f"✓ {len(links)} Artikel-Links gefunden nach Scrolling")
+            return list(links)[:200]  # Limit auf 200 Artikel (mehr als vorher)
+
+        except Exception as e:
+            print(f"✗ Fehler beim Laden der Artikel-Liste mit Browser: {e}")
+            return []
+
     def get_article_links(self):
         """Holt alle Artikel-Links von der neueste-artikel Seite."""
+        # Use browser-based scraping if available (supports lazy-loading)
+        if hasattr(self, 'use_browser') and self.use_browser and self.browser_page:
+            return self.get_article_links_with_browser()
+
+        # Fallback to simple requests (no lazy-loading support)
         print(f"→ Lade Artikel-Liste von {self.base_url}...")
-        
+
         try:
             resp = self.session.get(self.base_url, timeout=30)
             resp.raise_for_status()
             soup = BeautifulSoup(resp.text, 'html.parser')
-            
+
             links = set()
             for a in soup.find_all('a', href=True):
                 href = a['href']
@@ -485,10 +544,10 @@ class NZZScraper:
                 if re.match(r'^/[\w-]+/[\w-]+\.\d+$', href):
                     full_url = urljoin('https://www.nzz.ch', href)
                     links.add(full_url)
-            
-            print(f"✓ {len(links)} Artikel-Links gefunden")
-            return list(links)[:50]  # Limit auf 50 Artikel
-            
+
+            print(f"✓ {len(links)} Artikel-Links gefunden (ohne Scrolling)")
+            return list(links)[:100]  # Limit auf 100 Artikel
+
         except Exception as e:
             print(f"✗ Fehler beim Laden der Artikel-Liste: {e}")
             return []
