@@ -142,6 +142,18 @@ function ZipLoader({ onArticlesLoaded, onLoading, onError, onAvailableDatesLoade
       setLastUpdate(data.date)
       saveToLocalStorage('nzz_last_update', data.date)
 
+      // Lade auch gestrigen Tag neu (könnte noch ergänzt worden sein)
+      const yesterday = new Date()
+      yesterday.setDate(yesterday.getDate() - 1)
+      const yesterdayStr = yesterday.toISOString().split('T')[0]
+      if (yesterdayStr !== data.date) {
+        try {
+          await loadArticlesByDate(yesterdayStr)
+        } catch {
+          // Gestern existiert möglicherweise nicht, das ist ok
+        }
+      }
+
     } catch (err) {
       console.error('Fehler beim Laden:', err)
       onError('Konnte keine neuen Artikel laden. Offline-Modus aktiv.')
