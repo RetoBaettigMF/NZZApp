@@ -43,9 +43,9 @@ function ZipLoader({ onArticlesLoaded, onLoading, onError, onAvailableDatesLoade
     }
   }
 
-  const loadArticlesByDate = async (dateString) => {
+  const loadArticlesByDate = async (dateString, silent = false) => {
     onLoading(true)
-    onError(null)
+    if (!silent) onError(null)
 
     try {
       const downloadUrl = `${API_BASE}/download/${dateString}`
@@ -97,7 +97,7 @@ function ZipLoader({ onArticlesLoaded, onLoading, onError, onAvailableDatesLoade
 
     } catch (err) {
       console.error('Fehler beim Laden:', err)
-      onError('Konnte Artikel nicht laden.')
+      if (!silent) onError('Konnte Artikel nicht laden.')
     } finally {
       onLoading(false)
     }
@@ -147,11 +147,7 @@ function ZipLoader({ onArticlesLoaded, onLoading, onError, onAvailableDatesLoade
       yesterday.setDate(yesterday.getDate() - 1)
       const yesterdayStr = yesterday.toISOString().split('T')[0]
       if (yesterdayStr !== data.date) {
-        try {
-          await loadArticlesByDate(yesterdayStr)
-        } catch {
-          // Gestern existiert möglicherweise nicht, das ist ok
-        }
+        await loadArticlesByDate(yesterdayStr, true)
       }
 
     } catch (err) {
