@@ -1,0 +1,11 @@
+{
+  "users": [
+    {
+      "id": "1",
+      "email": "reto@baettig.org",
+      "password": "$2b$12$m5DyrdrmEHCpN3lhuar9Le58UyyB/F4OcV/qi0hEBcdZdRxjoIFqO",
+      "is_admin": true,
+      "created_at": "2026-02-19T00:00:00Z"
+    }
+  ]
+}

@@ -90,6 +90,12 @@ body {
   display: none;
 }
 
+.menu-divider {
+  height: 1px;
+  background: #e0e0e0;
+  margin: 0.5rem 0;
+}
+
 .error-banner {
   background: #fee;
   color: #c33;

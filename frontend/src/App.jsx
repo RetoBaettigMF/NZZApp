@@ -1,10 +1,15 @@
 import { useState, useEffect, useRef } from 'react'
 import './App.css'
+import { useAuth } from './contexts/AuthContext'
+import Login from './components/Login'
 import ArticleReader from './components/ArticleReader'
 import DateNavigator from './components/DateNavigator'
 import ZipLoader from './components/ZipLoader'
+import UserMenu from './components/UserMenu'
+import AdminPanel from './components/AdminPanel'
 
 function App() {
+  const { isAuthenticated, loading: authLoading } = useAuth()
   const [articles, setArticles] = useState([])
   const [currentDate, setCurrentDate] = useState('all')
   const [isLoading, setIsLoading] = useState(false)
@@ -20,6 +25,7 @@ function App() {
     return saved ? JSON.parse(saved) : []
   })
   const [menuOpen, setMenuOpen] = useState(false)
+  const [showAdminPanel, setShowAdminPanel] = useState(false)
   const menuRef = useRef(null)
 
   // Schließe Menü beim Klick außerhalb
@@ -137,6 +143,19 @@ function App() {
     return true
   })
 
+  if (authLoading) {
+    return (
+      <div className="loading-overlay">
+        <div className="spinner"></div>
+        <p>Lade...</p>
+      </div>
+    )
+  }
+
+  if (!isAuthenticated) {
+    return <Login />
+  }
+
   return (
     <div className="app">
       <header className="app-header">
@@ -158,31 +177,42 @@ function App() {
           </button>
           {menuOpen && (
             <div className="dropdown-menu">
-            <label className="menu-toggle">
-              <input
-                type="checkbox"
-                checked={hideReadArticles}
-                onChange={(e) => setHideReadArticles(e.target.checked)}
-              />
-              <span className="toggle-slider"></span>
-              <span className="toggle-label">Gelesene Artikel ausblenden</span>
-            </label>
-            {hideReadArticles && (
-              <button
-                className="reset-read-btn"
-                onClick={() => {
-                  setReadArticles([])
+              <UserMenu
+                onShowAdmin={() => {
+                  setShowAdminPanel(true)
                   setMenuOpen(false)
                 }}
-                title="Alle Artikel als ungelesen markieren"
-              >
-                🔄 Zurücksetzen
-              </button>
-            )}
+              />
+              <div className="menu-divider"></div>
+              <label className="menu-toggle">
+                <input
+                  type="checkbox"
+                  checked={hideReadArticles}
+                  onChange={(e) => setHideReadArticles(e.target.checked)}
+                />
+                <span className="toggle-slider"></span>
+                <span className="toggle-label">Gelesene Artikel ausblenden</span>
+              </label>
+              {hideReadArticles && (
+                <button
+                  className="reset-read-btn"
+                  onClick={() => {
+                    setReadArticles([])
+                    setMenuOpen(false)
+                  }}
+                  title="Alle Artikel als ungelesen markieren"
+                >
+                  🔄 Zurücksetzen
+                </button>
+              )}
             </div>
           )}
         </div>
       </header>
+
+      {showAdminPanel && (
+        <AdminPanel onClose={() => setShowAdminPanel(false)} />
+      )}
 
       {error && (
         <div className="error-banner">

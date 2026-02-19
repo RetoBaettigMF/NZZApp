@@ -5,3 +5,7 @@ python-dateutil
 python-dotenv
 schedule
 playwright>=1.48.0
+flask
+flask-cors
+bcrypt
+pyjwt

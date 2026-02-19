@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
 import JSZip from 'jszip'
+import { useAuth } from '../contexts/AuthContext'
 import './ZipLoader.css'
 
-const API_BASE = '/api'
+const API_BASE = 'http://localhost:8000/api'
 
 function ZipLoader({ onArticlesLoaded, onLoading, onError, onAvailableDatesLoaded, onLoadDateReady }) {
+  const { token } = useAuth()
   const [lastUpdate, setLastUpdate] = useState(() => {
     return localStorage.getItem('nzz_last_update') || null
   })
@@ -24,7 +26,11 @@ function ZipLoader({ onArticlesLoaded, onLoading, onError, onAvailableDatesLoade
 
   const loadAvailableDates = async () => {
     try {
-      const response = await fetch(`${API_BASE}/list`)
+      const response = await fetch(`${API_BASE}/list`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
       if (!response.ok) return
 
       const data = await response.json()
@@ -42,8 +48,12 @@ function ZipLoader({ onArticlesLoaded, onLoading, onError, onAvailableDatesLoade
     onError(null)
 
     try {
-      const downloadUrl = `/api/download/${dateString}`
-      const zipResponse = await fetch(downloadUrl)
+      const downloadUrl = `${API_BASE}/download/${dateString}`
+      const zipResponse = await fetch(downloadUrl, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
       if (!zipResponse.ok) {
         throw new Error('ZIP konnte nicht geladen werden')
       }
@@ -108,7 +118,11 @@ function ZipLoader({ onArticlesLoaded, onLoading, onError, onAvailableDatesLoade
       }
 
       // Lade neuestes Archiv vom Server
-      const response = await fetch(`${API_BASE}/latest`)
+      const response = await fetch(`${API_BASE}/latest`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
       if (!response.ok) {
         throw new Error('Keine Archive gefunden')
       }
