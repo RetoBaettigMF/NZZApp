@@ -130,9 +130,11 @@ function ZipLoader({ onArticlesLoaded, onLoading, onError, onAvailableDatesLoade
       const data = await response.json()
 
       // Prüfe ob neuer als lokale Daten
-      if (lastUpdate === data.date && localArticles) {
+      // Heutigen Tag immer neu laden, da der Server ihn laufend aktualisiert
+      const today = new Date().toISOString().split('T')[0]
+      if (lastUpdate === data.date && localArticles && data.date !== today) {
         onLoading(false)
-        return // Daten sind aktuell
+        return // Daten sind aktuell (und nicht von heute)
       }
 
       // Lade ZIP
