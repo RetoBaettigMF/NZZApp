@@ -1,143 +1,73 @@
-# NZZ Reader App
+# 📰 NZZ Reader
 
-Eine Progressive Web App (PWA) zum Lesen von NZZ Artikeln mit Offline-Support.
+Eine moderne Progressive Web App (PWA) zum Lesen von NZZ-Artikeln mit Offline-Support und Authentifizierung.
 
-**Repository:** https://github.com/RetoBaettigMF/NZZApp
+## ✨ Features
 
-## Features
+### Für alle Benutzer:
+- 📱 **Progressive Web App** - Installierbar auf Desktop und Mobile
+- 🔐 **Sicheres Login-System** - JWT-basierte Authentifizierung
+- 📖 **Artikel-Reader** - Optimiert für Lesbarkeit
+- 💾 **Offline-Support** - Artikel im LocalStorage speichern
+- 🗓️ **Datums-Navigation** - Durch Tage navigieren
+- ✅ **Lesefortschritt** - Artikel automatisch als gelesen markieren
+- 👁️ **Gelesene ausblenden** - Optional bereits gelesene Artikel verstecken
+- ⭐ **Artikel markieren** - Wichtige Artikel mit Stern kennzeichnen
+- 🔑 **Passwort ändern** - Eigenes Passwort jederzeit ändern
 
-### Backend
-- 🤖 Automatisches Scraping täglich um 06:00 Uhr
-- 📚 Artikel als Markdown gespeichert (kategorisiert)
-- 📦 Automatische ZIP-Archivierung
-- 🗂️ Kategorien: Sport, Wirtschaft, Wissenschaft, Lokal, Welt
-- 🔐 Login mit NZZ Account
+### Für Administratoren:
+- 👥 **User-Verwaltung** - Neue User erstellen und verwalten
+- 🔄 **Passwort-Reset** - Passwörter aller User zurücksetzen
+- 🗑️ **User löschen** - Nicht mehr benötigte Accounts entfernen
 
-### Frontend (PWA)
-- 📱 Installierbar auf Smartphone/Desktop
-- 💾 Offline-Support mit LocalStorage
-- 🏷️ Kategorie-Filter
-- 👆 Swipe-Navigation (Touch & Tastatur)
-- ⭐ Artikel markieren zum Behalten
-- 🗑️ Nicht markierte Artikel automatisch löschen
+## 🚀 Schnellstart
 
-## Setup
+### Voraussetzungen
+- Python 3.9+
+- Node.js 18+
+- npm oder yarn
 
-### 1. Repository klonen
-```bash
-git clone https://github.com/RetoBaettigMF/NZZApp.git
-cd NZZApp
-```
+### Backend starten
 
-### 2. Backend einrichten
-```bash
+\`\`\`bash
 cd backend
-python3 -m venv venv
-source venv/bin/activate
 pip install -r requirements.txt
+python3 flask_server.py
+\`\`\`
 
-# Erstmalige Konfiguration (fragt nach Passwort)
-python init_config.py
-```
+Server läuft auf: **http://localhost:8000**
 
-### 3. Frontend einrichten
-```bash
+### Frontend starten
+
+\`\`\`bash
 cd frontend
 npm install
-npm run build
-```
-
-## Verwendung
-
-### Backend starten (Scheduler)
-```bash
-cd backend
-source venv/bin/activate
-python scheduler.py
-```
-
-Für sofortigen Testlauf:
-```bash
-python scheduler.py --run-now
-```
-
-### API Server starten (für Frontend)
-```bash
-cd backend
-source venv/bin/activate
-python api_server.py
-```
-
-Server läuft auf http://localhost:8000
-
-### Frontend entwickeln
-```bash
-cd frontend
 npm run dev
-```
+\`\`\`
 
-Dev-Server läuft auf http://localhost:5173
+Frontend läuft auf: **http://localhost:5173**
 
-### Frontend bauen
-```bash
-cd frontend
-npm run build
-```
+## 🔐 Standard-Login
 
-Die fertige PWA liegt im `dist/` Ordner.
+\`\`\`
+Email: reto@baettig.org
+Passwort: 123
+\`\`\`
 
-## API Endpoints
+⚠️ **Wichtig:** Ändere das Admin-Passwort nach dem ersten Login!
 
-- `GET /api/latest` - Informationen zum neuesten Archiv
-- `GET /api/list` - Liste aller verfügbaren Archive
-- `GET /api/download/YYYY-MM-DD` - ZIP-Archiv herunterladen
+## 📚 Dokumentation
 
-## Projektstruktur
+- **[AUTH_README.md](backend/AUTH_README.md)** - Detaillierte Auth-Dokumentation
+- **[CHANGELOG.md](CHANGELOG.md)** - Alle Änderungen und Updates
 
-```
-NZZApp/
-├── backend/
-│   ├── scraper.py          # Haupt-Scraper
-│   ├── scheduler.py        # Täglicher Scheduler
-│   ├── api_server.py       # HTTP API
-│   ├── init_config.py      # Erstkonfiguration
-│   ├── create_icons.py     # Icon-Generator
-│   └── articles/           # Gespeicherte Artikel
-├── frontend/
-│   ├── src/
-│   │   ├── App.jsx
-│   │   └── components/
-│   │       ├── ArticleReader.jsx
-│   │       ├── CategorySelector.jsx
-│   │       └── ZipLoader.jsx
-│   └── dist/               # Build-Output
-└── README.md
-```
+## 🔒 Sicherheit
 
-## Tastatur-Navigation
+- Passwort-Hashing mit bcrypt
+- JWT Token-Authentifizierung (24h)
+- Geschützte API-Endpoints
+- Admin-Permissions
 
-- `→` oder `Leertaste` - Nächster Artikel
-- `←` - Vorheriger Artikel
-- `*` - Artikel markieren/demarkieren
+---
 
-## Touch-Gesten
-
-- Swipe nach links - Nächster Artikel
-- Swipe nach rechts - Vorheriger Artikel
-
-## Wichtige Hinweise
-
-- Das NZZ-Passwort wird in `backend/.env` gespeichert
-- Artikel werden in `backend/articles/` als Markdown gespeichert
-- ZIP-Archive werden automatisch erstellt
-- Markierte Artikel werden nicht gelöscht
-
-## Technologien
-
-- **Backend:** Python, requests, BeautifulSoup, schedule
-- **Frontend:** React, Vite, JSZip, PWA
-- **Storage:** LocalStorage (Frontend), Filesystem (Backend)
-
-## Lizenz
-
-Privates Projekt für persönlichen Gebrauch.
+**Version:** 2.0.0 | **Letzte Aktualisierung:** 19. Februar 2026
