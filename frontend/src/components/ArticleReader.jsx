@@ -18,6 +18,7 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
 
   // Scroll to top on article change
   useEffect(() => {
+    window.scrollTo(0, 0)
     if (cardRef.current) {
       cardRef.current.scrollTop = 0
     }
@@ -181,9 +182,11 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
   }
 
   // Entferne die ersten 2 Zeilen (Wiederholung des Titels)
+  // Normalisiere \n zu <br> damit beide Formate funktionieren
   const cleanedContent = useMemo(() => {
     if (!currentArticle?.content) return ''
-    const parts = currentArticle.content.split('<br>')
+    const normalized = currentArticle.content.replace(/\n/g, '<br>')
+    const parts = normalized.split('<br>')
     return parts.slice(2).join('<br>').replace(/^(<br>\s*)+/, '')
   }, [currentArticle])
 
