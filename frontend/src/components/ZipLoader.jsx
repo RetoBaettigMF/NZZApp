@@ -3,7 +3,7 @@ import JSZip from 'jszip'
 import { useAuth } from '../contexts/AuthContext'
 import './ZipLoader.css'
 
-const API_BASE = 'http://localhost:8000/api'
+const API_BASE = '/api'
 
 function ZipLoader({ onArticlesLoaded, onLoading, onError, onAvailableDatesLoaded, onLoadDateReady }) {
   const { token } = useAuth()

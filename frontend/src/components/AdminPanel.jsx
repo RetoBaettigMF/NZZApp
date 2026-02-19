@@ -23,7 +23,7 @@ function AdminPanel({ onClose }) {
 
   const loadUsers = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/users', {
+      const response = await fetch('/api/users', {
         headers: { 'Authorization': `Bearer ${token}` }
       })
 
@@ -43,7 +43,7 @@ function AdminPanel({ onClose }) {
     setError(null)
 
     try {
-      const response = await fetch('http://localhost:8000/api/users', {
+      const response = await fetch('/api/users', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -70,7 +70,7 @@ function AdminPanel({ onClose }) {
     if (!confirm('User wirklich löschen?')) return
 
     try {
-      const response = await fetch(`http://localhost:8000/api/users/${userId}`, {
+      const response = await fetch(`/api/users/${userId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       })
@@ -90,7 +90,7 @@ function AdminPanel({ onClose }) {
     if (!resetPassword) return
 
     try {
-      const response = await fetch(`http://localhost:8000/api/users/${userId}/reset-password`, {
+      const response = await fetch(`/api/users/${userId}/reset-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
