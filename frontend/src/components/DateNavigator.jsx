@@ -6,18 +6,23 @@ function DateNavigator({ availableDates, availableServerDates, currentDate, onDa
   const allDates = availableServerDates.length > 0 ? availableServerDates : availableDates
 
   const currentIndex = allDates.indexOf(currentDate)
-  const hasPrevious = currentIndex > 0
-  const hasNext = currentIndex < allDates.length - 1
+  // Da allDates nach neuesten Datum zuerst sortiert ist:
+  // - Vorheriger Tag (älter) = Index erhöhen
+  // - Nächster Tag (neuer) = Index verringern
+  const hasPrevious = currentIndex < allDates.length - 1
+  const hasNext = currentIndex > 0
 
   const handlePrevious = () => {
+    // Vorheriger Tag = älteres Datum = höherer Index
     if (hasPrevious) {
-      onDateChange(allDates[currentIndex - 1])
+      onDateChange(allDates[currentIndex + 1])
     }
   }
 
   const handleNext = () => {
+    // Nächster Tag = neueres Datum = niedrigerer Index
     if (hasNext) {
-      onDateChange(allDates[currentIndex + 1])
+      onDateChange(allDates[currentIndex - 1])
     }
   }
 

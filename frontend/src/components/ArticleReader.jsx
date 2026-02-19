@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import './ArticleReader.css'
 
-function ArticleReader({ articles, onArticlesUpdate }) {
+function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArticles }) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [savedArticles, setSavedArticles] = useState(() => {
     const saved = localStorage.getItem('nzz_saved_articles')
@@ -14,6 +14,13 @@ function ArticleReader({ articles, onArticlesUpdate }) {
   })
 
   const currentArticle = articles[currentIndex]
+
+  // Passe currentIndex an wenn er ungültig wird (z.B. wenn Artikel ausgeblendet werden)
+  useEffect(() => {
+    if (currentIndex >= articles.length && articles.length > 0) {
+      setCurrentIndex(articles.length - 1)
+    }
+  }, [articles.length, currentIndex])
 
   // Speichere markierte Artikel
   useEffect(() => {
@@ -37,23 +44,46 @@ function ArticleReader({ articles, onArticlesUpdate }) {
 
   const handleNext = useCallback(() => {
     if (currentIndex < articles.length - 1) {
+      // Markiere aktuellen Artikel als gelesen BEVOR wir zum nächsten navigieren
+      if (currentArticle && onArticleRead) {
+        onArticleRead(currentArticle.id)
+      }
+
       setDirection('left')
       setTimeout(() => {
-        setCurrentIndex(prev => prev + 1)
+        // Wenn hideReadArticles aktiv ist, bleibe beim gleichen Index
+        // (der nächste Artikel rutscht nach durch das Filtern)
+        // Sonst gehe zum nächsten Index
+        if (hideReadArticles) {
+          setCurrentIndex(prev => prev) // Bleibe beim gleichen Index
+        } else {
+          setCurrentIndex(prev => prev + 1)
+        }
         setDirection(null)
       }, 200)
+    } else {
+      // Am Ende der Liste angelangt
+      alert('Du bist bereits beim ältesten Artikel')
     }
-  }, [currentIndex, articles.length])
+  }, [currentIndex, articles.length, currentArticle, onArticleRead, hideReadArticles])
 
   const handlePrevious = useCallback(() => {
     if (currentIndex > 0) {
+      // Markiere aktuellen Artikel als gelesen BEVOR wir zum vorherigen navigieren
+      if (currentArticle && onArticleRead) {
+        onArticleRead(currentArticle.id)
+      }
+
       setDirection('right')
       setTimeout(() => {
         setCurrentIndex(prev => prev - 1)
         setDirection(null)
       }, 200)
+    } else {
+      // Am Anfang der Liste angelangt (neuester Artikel)
+      alert('Du bist bereits beim neuesten Artikel')
     }
-  }, [currentIndex])
+  }, [currentIndex, currentArticle, onArticleRead])
 
   const toggleSave = useCallback(() => {
     if (!currentArticle) return
@@ -68,20 +98,44 @@ function ArticleReader({ articles, onArticlesUpdate }) {
     })
   }, [currentArticle])
 
-  const jumpToLastRead = useCallback(() => {
-    if (!lastReadPosition) return
-
-    // Finde Artikel anhand ID
-    const targetIndex = articles.findIndex(a => a.id === lastReadPosition.articleId)
-
-    if (targetIndex !== -1) {
-      setCurrentIndex(targetIndex)
-    } else {
-      alert('Letzter Artikel nicht mehr verfügbar (möglicherweise gefiltert oder gelöscht)')
+  const jumpToNewest = useCallback(() => {
+    // Markiere aktuellen Artikel als gelesen BEVOR wir springen
+    if (currentArticle && onArticleRead) {
+      onArticleRead(currentArticle.id)
     }
-  }, [articles, lastReadPosition])
+    setCurrentIndex(0) // Index 0 = neuester Artikel (bereits nach Datum sortiert)
+  }, [currentArticle, onArticleRead])
 
   const isSaved = currentArticle && savedArticles.includes(currentArticle.id || currentArticle.url)
+
+  // Entferne doppelten Titel aus Content (wenn vorhanden)
+  const cleanedContent = useMemo(() => {
+    if (!currentArticle?.content || !currentArticle?.title) {
+      return currentArticle?.content || ''
+    }
+
+    // Erstelle ein temporäres DOM-Element zum Parsen
+    const tempDiv = document.createElement('div')
+    tempDiv.innerHTML = currentArticle.content
+
+    // Finde erstes Heading (h1, h2, h3)
+    const firstHeading = tempDiv.querySelector('h1, h2, h3')
+
+    // Wenn das erste Heading dem Titel entspricht, entferne es
+    if (firstHeading) {
+      const headingText = firstHeading.textContent.trim()
+      const titleText = currentArticle.title.trim()
+
+      // Robuster Vergleich: Entferne auch Zeilenumbrüche und mehrfache Leerzeichen
+      const normalizeText = (text) => text.replace(/\s+/g, ' ').trim()
+
+      if (normalizeText(headingText) === normalizeText(titleText)) {
+        firstHeading.remove()
+      }
+    }
+
+    return tempDiv.innerHTML
+  }, [currentArticle])
 
   // Touch/Swipe Handling
   const [touchStart, setTouchStart] = useState(null)
@@ -129,7 +183,7 @@ function ArticleReader({ articles, onArticlesUpdate }) {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [handleNext, handlePrevious, toggleSave, jumpToLastRead])
+  }, [handleNext, handlePrevious, toggleSave, jumpToNewest])
 
   const deleteCurrentArticle = () => {
     const updatedArticles = articles.filter((_, idx) => idx !== currentIndex)
@@ -198,9 +252,9 @@ function ArticleReader({ articles, onArticlesUpdate }) {
           </a>
         </div>
 
-        <div 
+        <div
           className="article-content"
-          dangerouslySetInnerHTML={{ __html: currentArticle.content }}
+          dangerouslySetInnerHTML={{ __html: cleanedContent }}
         />
       </div>
 
@@ -214,15 +268,15 @@ function ArticleReader({ articles, onArticlesUpdate }) {
         </button>
 
         <button
-          className="control-btn jump-last"
-          onClick={jumpToLastRead}
-          disabled={!lastReadPosition || lastReadPosition.articleId === currentArticle?.id}
-          title="Zur letzten Leseposition springen"
+          className="control-btn jump-newest"
+          onClick={jumpToNewest}
+          disabled={currentIndex === 0}
+          title="Zum neuesten Artikel springen"
         >
-          📍 Letzte Position
+          🔝 Neuester Artikel
         </button>
 
-        <button 
+        <button
           className="control-btn delete"
           onClick={deleteCurrentArticle}
           disabled={isSaved}
@@ -231,14 +285,14 @@ function ArticleReader({ articles, onArticlesUpdate }) {
           🗑 Löschen
         </button>
 
-        <button 
+        <button
           className="control-btn save-toggle"
           onClick={toggleSave}
         >
           {isSaved ? '★ Markiert' : '☆ Markieren'}
         </button>
 
-        <button 
+        <button
           className="control-btn next"
           onClick={handleNext}
           disabled={currentIndex >= articles.length - 1}

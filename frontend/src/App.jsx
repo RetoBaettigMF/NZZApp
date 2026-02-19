@@ -1,18 +1,40 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import './App.css'
 import ArticleReader from './components/ArticleReader'
-import CategorySelector from './components/CategorySelector'
 import DateNavigator from './components/DateNavigator'
 import ZipLoader from './components/ZipLoader'
 
 function App() {
   const [articles, setArticles] = useState([])
-  const [currentCategory, setCurrentCategory] = useState('all')
   const [currentDate, setCurrentDate] = useState('all')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState(null)
   const [availableServerDates, setAvailableServerDates] = useState([])
   const [loadDateFunc, setLoadDateFunc] = useState(null)
+  const [hideReadArticles, setHideReadArticles] = useState(() => {
+    const saved = localStorage.getItem('nzz_hide_read_articles')
+    return saved === 'true'
+  })
+  const [readArticles, setReadArticles] = useState(() => {
+    const saved = localStorage.getItem('nzz_read_articles')
+    return saved ? JSON.parse(saved) : []
+  })
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef(null)
+
+  // Schließe Menü beim Klick außerhalb
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setMenuOpen(false)
+      }
+    }
+
+    if (menuOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [menuOpen])
 
   // Lade Artikel aus LocalStorage beim Start
   useEffect(() => {
@@ -33,6 +55,16 @@ function App() {
     }
   }, [articles])
 
+  // Speichere hideReadArticles Präferenz
+  useEffect(() => {
+    localStorage.setItem('nzz_hide_read_articles', hideReadArticles.toString())
+  }, [hideReadArticles])
+
+  // Speichere gelesene Artikel
+  useEffect(() => {
+    localStorage.setItem('nzz_read_articles', JSON.stringify(readArticles))
+  }, [readArticles])
+
   const handleArticlesLoaded = (newArticles) => {
     setArticles(newArticles)
     setError(null)
@@ -40,6 +72,15 @@ function App() {
 
   const handleArticleUpdate = (updatedArticles) => {
     setArticles(updatedArticles)
+  }
+
+  const handleArticleRead = (articleId) => {
+    setReadArticles(prev => {
+      if (!prev.includes(articleId)) {
+        return [...prev, articleId]
+      }
+      return prev
+    })
   }
 
   const handleDateChange = async (newDate) => {
@@ -78,36 +119,69 @@ function App() {
   }, [availableDates.length])
 
   const filteredArticles = articles.filter(a => {
-    // Kategorie-Filter
-    const matchCategory = currentCategory === 'all' || a.category === currentCategory
-
     // Datums-Filter
-    let matchDate = true
     if (currentDate !== 'all') {
       try {
         const articleDate = new Date(a.date).toISOString().split('T')[0]
-        matchDate = articleDate === currentDate
+        if (articleDate !== currentDate) return false
       } catch {
-        matchDate = false
+        return false
       }
     }
 
-    return matchCategory && matchDate
-  })
+    // Gelesene Artikel Filter
+    if (hideReadArticles && readArticles.includes(a.id)) {
+      return false
+    }
 
-  const categories = [...new Set(articles.map(a => a.category))]
+    return true
+  })
 
   return (
     <div className="app">
       <header className="app-header">
         <h1>📰 NZZ Reader</h1>
-        <ZipLoader
-          onArticlesLoaded={handleArticlesLoaded}
-          onLoading={setIsLoading}
-          onError={setError}
-          onAvailableDatesLoaded={setAvailableServerDates}
-          onLoadDateReady={(func) => setLoadDateFunc(() => func)}
-        />
+        <div className="header-controls" ref={menuRef}>
+          <ZipLoader
+            onArticlesLoaded={handleArticlesLoaded}
+            onLoading={setIsLoading}
+            onError={setError}
+            onAvailableDatesLoaded={setAvailableServerDates}
+            onLoadDateReady={(func) => setLoadDateFunc(() => func)}
+          />
+          <button
+            className="hamburger-btn"
+            onClick={() => setMenuOpen(!menuOpen)}
+            aria-label="Menü"
+          >
+            ☰
+          </button>
+          {menuOpen && (
+            <div className="dropdown-menu">
+            <label className="menu-toggle">
+              <input
+                type="checkbox"
+                checked={hideReadArticles}
+                onChange={(e) => setHideReadArticles(e.target.checked)}
+              />
+              <span className="toggle-slider"></span>
+              <span className="toggle-label">Gelesene Artikel ausblenden</span>
+            </label>
+            {hideReadArticles && (
+              <button
+                className="reset-read-btn"
+                onClick={() => {
+                  setReadArticles([])
+                  setMenuOpen(false)
+                }}
+                title="Alle Artikel als ungelesen markieren"
+              >
+                🔄 Zurücksetzen
+              </button>
+            )}
+            </div>
+          )}
+        </div>
       </header>
 
       {error && (
@@ -132,15 +206,6 @@ function App() {
         />
       )}
 
-      {articles.length > 0 && (
-        <CategorySelector
-          categories={categories}
-          currentCategory={currentCategory}
-          onCategoryChange={setCurrentCategory}
-          articleCount={filteredArticles.length}
-        />
-      )}
-
       {articles.length === 0 && !isLoading ? (
         <div className="welcome">
           <div className="welcome-icon">📰</div>
@@ -149,9 +214,11 @@ function App() {
           <p className="hint">Die Artikel werden automatisch vom Server geladen.</p>
         </div>
       ) : (
-        <ArticleReader 
+        <ArticleReader
           articles={filteredArticles}
           onArticlesUpdate={handleArticleUpdate}
+          onArticleRead={handleArticleRead}
+          hideReadArticles={hideReadArticles}
         />
       )}
     </div>
