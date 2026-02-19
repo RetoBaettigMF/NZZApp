@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import './ArticleReader.css'
 
 function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArticles }) {
@@ -7,13 +7,21 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
     const saved = localStorage.getItem('nzz_saved_articles')
     return saved ? JSON.parse(saved) : []
   })
-  const [direction, setDirection] = useState(null)
-  const [lastReadPosition, setLastReadPosition] = useState(() => {
-    const saved = localStorage.getItem('nzz_last_read_position')
-    return saved ? JSON.parse(saved) : null
-  })
+  const [swipeX, setSwipeX] = useState(0)
+  const [isSwiping, setIsSwiping] = useState(false)
+  const [isAnimating, setIsAnimating] = useState(false)
+  const cardRef = useRef(null)
+  const touchStartX = useRef(null)
+  const swipeXRef = useRef(0)
 
   const currentArticle = articles[currentIndex]
+
+  // Scroll to top on article change
+  useEffect(() => {
+    if (cardRef.current) {
+      cardRef.current.scrollTop = 0
+    }
+  }, [currentIndex])
 
   // Passe currentIndex an wenn er ungültig wird (z.B. wenn Artikel ausgeblendet werden)
   useEffect(() => {
@@ -37,57 +45,61 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
         timestamp: Date.now(),
         index: currentIndex
       }
-      setLastReadPosition(position)
       localStorage.setItem('nzz_last_read_position', JSON.stringify(position))
     }
   }, [currentIndex, currentArticle])
 
-  const handleNext = useCallback(() => {
-    if (currentIndex < articles.length - 1) {
-      // Markiere aktuellen Artikel als gelesen BEVOR wir zum nächsten navigieren
-      if (currentArticle && onArticleRead) {
-        onArticleRead(currentArticle.id)
-      }
+  const updateSwipeX = (x) => {
+    swipeXRef.current = x
+    setSwipeX(x)
+  }
 
-      setDirection('left')
-      setTimeout(() => {
-        // Wenn hideReadArticles aktiv ist, bleibe beim gleichen Index
-        // (der nächste Artikel rutscht nach durch das Filtern)
-        // Sonst gehe zum nächsten Index
-        if (hideReadArticles) {
-          setCurrentIndex(prev => prev) // Bleibe beim gleichen Index
-        } else {
+  const markRead = useCallback(() => {
+    if (currentArticle && onArticleRead) {
+      onArticleRead(currentArticle.id)
+    }
+  }, [currentArticle, onArticleRead])
+
+  // Animiert die Karte nach links/rechts aus dem Bildschirm, dann wird onComplete aufgerufen
+  const animateAway = useCallback((direction, onComplete) => {
+    const targetX = direction === 'left' ? -window.innerWidth : window.innerWidth
+    setIsAnimating(true)
+    updateSwipeX(targetX)
+    setTimeout(() => {
+      onComplete()
+      updateSwipeX(0)
+      setTimeout(() => setIsAnimating(false), 30)
+    }, 250)
+  }, [])
+
+  const handleNext = useCallback(() => {
+    if (isAnimating) return
+    if (currentIndex < articles.length - 1) {
+      animateAway('left', () => {
+        markRead()
+        if (!hideReadArticles) {
           setCurrentIndex(prev => prev + 1)
         }
-        setDirection(null)
-      }, 200)
+      })
     } else {
-      // Am Ende der Liste angelangt
       alert('Du bist bereits beim ältesten Artikel')
     }
-  }, [currentIndex, articles.length, currentArticle, onArticleRead, hideReadArticles])
+  }, [currentIndex, articles.length, isAnimating, animateAway, markRead, hideReadArticles])
 
   const handlePrevious = useCallback(() => {
+    if (isAnimating) return
     if (currentIndex > 0) {
-      // Markiere aktuellen Artikel als gelesen BEVOR wir zum vorherigen navigieren
-      if (currentArticle && onArticleRead) {
-        onArticleRead(currentArticle.id)
-      }
-
-      setDirection('right')
-      setTimeout(() => {
+      animateAway('right', () => {
+        markRead()
         setCurrentIndex(prev => prev - 1)
-        setDirection(null)
-      }, 200)
+      })
     } else {
-      // Am Anfang der Liste angelangt (neuester Artikel)
       alert('Du bist bereits beim neuesten Artikel')
     }
-  }, [currentIndex, currentArticle, onArticleRead])
+  }, [currentIndex, isAnimating, animateAway, markRead])
 
   const toggleSave = useCallback(() => {
     if (!currentArticle) return
-
     const articleId = currentArticle.id || currentArticle.url
     setSavedArticles(prev => {
       if (prev.includes(articleId)) {
@@ -99,72 +111,47 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
   }, [currentArticle])
 
   const jumpToNewest = useCallback(() => {
-    // Markiere aktuellen Artikel als gelesen BEVOR wir springen
-    if (currentArticle && onArticleRead) {
-      onArticleRead(currentArticle.id)
-    }
-    setCurrentIndex(0) // Index 0 = neuester Artikel (bereits nach Datum sortiert)
-  }, [currentArticle, onArticleRead])
+    markRead()
+    setCurrentIndex(0)
+  }, [markRead])
 
-  const isSaved = currentArticle && savedArticles.includes(currentArticle.id || currentArticle.url)
-
-  // Entferne doppelten Titel aus Content (wenn vorhanden)
-  const cleanedContent = useMemo(() => {
-    if (!currentArticle?.content || !currentArticle?.title) {
-      return currentArticle?.content || ''
-    }
-
-    // Erstelle ein temporäres DOM-Element zum Parsen
-    const tempDiv = document.createElement('div')
-    tempDiv.innerHTML = currentArticle.content
-
-    // Finde erstes Heading (h1, h2, h3)
-    const firstHeading = tempDiv.querySelector('h1, h2, h3')
-
-    // Wenn das erste Heading dem Titel entspricht, entferne es
-    if (firstHeading) {
-      const headingText = firstHeading.textContent.trim()
-      const titleText = currentArticle.title.trim()
-
-      // Robuster Vergleich: Entferne auch Zeilenumbrüche und mehrfache Leerzeichen
-      const normalizeText = (text) => text.replace(/\s+/g, ' ').trim()
-
-      if (normalizeText(headingText) === normalizeText(titleText)) {
-        firstHeading.remove()
-      }
-    }
-
-    return tempDiv.innerHTML
-  }, [currentArticle])
-
-  // Touch/Swipe Handling
-  const [touchStart, setTouchStart] = useState(null)
-  const [touchEnd, setTouchEnd] = useState(null)
+  // Touch/Swipe Handling mit Echtzeit-Animation
   const minSwipeDistance = 50
 
-  const onTouchStart = (e) => {
-    setTouchStart(e.targetTouches[0].clientX)
-  }
+  const onTouchStart = useCallback((e) => {
+    if (isAnimating) return
+    touchStartX.current = e.targetTouches[0].clientX
+    setIsSwiping(true)
+  }, [isAnimating])
 
-  const onTouchMove = (e) => {
-    setTouchEnd(e.targetTouches[0].clientX)
-  }
+  const onTouchMove = useCallback((e) => {
+    if (touchStartX.current === null) return
+    const delta = e.targetTouches[0].clientX - touchStartX.current
+    updateSwipeX(delta)
+  }, [])
 
-  const onTouchEnd = () => {
-    if (!touchStart || !touchEnd) return
-    const distance = touchStart - touchEnd
-    const isLeftSwipe = distance > minSwipeDistance
-    const isRightSwipe = distance < -minSwipeDistance
+  const onTouchEnd = useCallback(() => {
+    if (touchStartX.current === null) return
+    setIsSwiping(false)
+    const delta = swipeXRef.current
+    touchStartX.current = null
 
-    if (isLeftSwipe) {
-      handleNext()
-    } else if (isRightSwipe) {
-      handlePrevious()
+    if (delta < -minSwipeDistance && currentIndex < articles.length - 1) {
+      animateAway('left', () => {
+        markRead()
+        if (!hideReadArticles) {
+          setCurrentIndex(prev => prev + 1)
+        }
+      })
+    } else if (delta > minSwipeDistance && currentIndex > 0) {
+      animateAway('right', () => {
+        markRead()
+        setCurrentIndex(prev => prev - 1)
+      })
+    } else {
+      updateSwipeX(0) // Snap back zur Mitte
     }
-
-    setTouchStart(null)
-    setTouchEnd(null)
-  }
+  }, [currentIndex, articles.length, animateAway, markRead, hideReadArticles])
 
   // Tastatur-Navigation
   useEffect(() => {
@@ -183,7 +170,7 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [handleNext, handlePrevious, toggleSave, jumpToNewest])
+  }, [handleNext, handlePrevious, toggleSave])
 
   const deleteCurrentArticle = () => {
     const updatedArticles = articles.filter((_, idx) => idx !== currentIndex)
@@ -191,6 +178,21 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
     if (currentIndex >= updatedArticles.length && currentIndex > 0) {
       setCurrentIndex(currentIndex - 1)
     }
+  }
+
+  // Entferne die ersten 2 Zeilen (Wiederholung des Titels)
+  const cleanedContent = useMemo(() => {
+    if (!currentArticle?.content) return ''
+    const parts = currentArticle.content.split('<br>')
+    return parts.slice(2).join('<br>').replace(/^(<br>\s*)+/, '')
+  }, [currentArticle])
+
+  const isSaved = currentArticle && savedArticles.includes(currentArticle.id || currentArticle.url)
+
+  const cardStyle = {
+    transform: `translateX(${swipeX}px)`,
+    transition: isSwiping ? 'none' : 'transform 0.25s ease, opacity 0.25s ease',
+    opacity: Math.max(0, 1 - Math.abs(swipeX) / (window.innerWidth * 0.6)),
   }
 
   if (!currentArticle) {
@@ -208,8 +210,8 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
   return (
     <div className="article-reader">
       <div className="progress-bar">
-        <div 
-          className="progress-fill" 
+        <div
+          className="progress-fill"
           style={{ width: `${((currentIndex + 1) / articles.length) * 100}%` }}
         />
         <span className="progress-text">
@@ -217,45 +219,49 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
         </span>
       </div>
 
-      <div 
-        className={`article-card ${direction ? `slide-${direction}` : ''}`}
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
-      >
-        <div className="article-header">
-          <span className="article-category">{currentArticle.category}</span>
-          <button 
-            className={`save-btn ${isSaved ? 'saved' : ''}`}
-            onClick={toggleSave}
-            title="Mit * markieren zum Behalten"
-          >
-            {isSaved ? '★' : '☆'}
-          </button>
-        </div>
-
-        <h2 className="article-title">{currentArticle.title}</h2>
-        
-        <div className="article-meta">
-          {currentArticle.date && (
-            <span className="article-date">
-              {new Date(currentArticle.date).toLocaleDateString('de-CH')}
-            </span>
-          )}
-          <a 
-            href={currentArticle.url} 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="article-link"
-          >
-            Original öffnen ↗
-          </a>
-        </div>
-
+      <div className="article-card-wrapper">
         <div
-          className="article-content"
-          dangerouslySetInnerHTML={{ __html: cleanedContent }}
-        />
+          ref={cardRef}
+          className="article-card"
+          style={cardStyle}
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+        >
+          <div className="article-header">
+            <span className="article-category">{currentArticle.category}</span>
+            <button
+              className={`save-btn ${isSaved ? 'saved' : ''}`}
+              onClick={toggleSave}
+              title="Mit * markieren zum Behalten"
+            >
+              {isSaved ? '★' : '☆'}
+            </button>
+          </div>
+
+          <h2 className="article-title">{currentArticle.title}</h2>
+
+          <div className="article-meta">
+            {currentArticle.date && (
+              <span className="article-date">
+                {new Date(currentArticle.date).toLocaleDateString('de-CH')}
+              </span>
+            )}
+            <a
+              href={currentArticle.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="article-link"
+            >
+              Original öffnen ↗
+            </a>
+          </div>
+
+          <div
+            className="article-content"
+            dangerouslySetInnerHTML={{ __html: cleanedContent }}
+          />
+        </div>
       </div>
 
       <div className="article-controls">

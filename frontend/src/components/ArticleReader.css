@@ -49,6 +49,13 @@
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
+.article-card-wrapper {
+  flex: 1;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
 .article-card {
   background: white;
   border-radius: 16px;
@@ -56,17 +63,7 @@
   flex: 1;
   overflow-y: auto;
   padding: 1.5rem;
-  transition: transform 0.2s ease;
-}
-
-.article-card.slide-left {
-  transform: translateX(-100px);
-  opacity: 0;
-}
-
-.article-card.slide-right {
-  transform: translateX(100px);
-  opacity: 0;
+  will-change: transform, opacity;
 }
 
 .article-header {
