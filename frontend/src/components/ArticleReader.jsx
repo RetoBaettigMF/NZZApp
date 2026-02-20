@@ -36,7 +36,7 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
       .replace(/[-*]\s/g, '')
       .replace(/\n{2,}/g, '. ')
       .trim()
-    return body
+    return `${article.title}. ${body}`
   }, [])
 
   const speakArticle = useCallback((article, textOverride = null) => {
