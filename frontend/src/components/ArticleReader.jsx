@@ -23,9 +23,42 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
   const currentIndexRef = useRef(0)
   const handleNextRef = useRef(null)
   const speakArticleRef = useRef(null)
+  const keepAliveRef = useRef(null)
+  const resumeTimerRef = useRef(null)
 
   const currentArticle = articles[currentIndex]
   currentIndexRef.current = currentIndex
+
+  const startKeepAlive = () => {
+    // Stille Audio-Session: verhindert dass iOS die Audio-Session beim Sperren beendet
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)()
+      const buffer = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate)
+      const source = ctx.createBufferSource()
+      source.buffer = buffer
+      source.loop = true
+      source.connect(ctx.destination)
+      source.start()
+      keepAliveRef.current = { ctx, source }
+    } catch (e) {}
+    // iOS-Bug: speechSynthesis stoppt nach ~15s – periodisch pause/resume
+    resumeTimerRef.current = setInterval(() => {
+      if (window.speechSynthesis.speaking) {
+        window.speechSynthesis.pause()
+        window.speechSynthesis.resume()
+      }
+    }, 10000)
+  }
+
+  const stopKeepAlive = () => {
+    clearInterval(resumeTimerRef.current)
+    resumeTimerRef.current = null
+    if (keepAliveRef.current) {
+      keepAliveRef.current.source.stop()
+      keepAliveRef.current.ctx.close()
+      keepAliveRef.current = null
+    }
+  }
 
   const getReadableText = useCallback((article) => {
     const body = (article.rawContent || '')
@@ -40,6 +73,8 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
   }, [])
 
   const speakArticle = useCallback((article, textOverride = null) => {
+    stopKeepAlive()
+    startKeepAlive()
     const synth = window.speechSynthesis
     const text = textOverride ?? getReadableText(article)
     const utterance = new SpeechSynthesisUtterance(text)
@@ -50,10 +85,11 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
         autoPlayRef.current = true
         handleNextRef.current?.()
       } else {
+        stopKeepAlive()
         setIsPlaying(false)
       }
     }
-    utterance.onerror = () => setIsPlaying(false)
+    utterance.onerror = () => { stopKeepAlive(); setIsPlaying(false) }
     utteranceRef.current = utterance
     synth.speak(utterance)
     setIsPlaying(true)
@@ -65,6 +101,7 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
     const synth = window.speechSynthesis
     if (isPlaying) {
       synth.cancel()
+      stopKeepAlive()
       setIsPlaying(false)
       return
     }
@@ -86,6 +123,7 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
       const article = articles[currentIndex]
       if (article) speakArticleRef.current(article)
     } else {
+      stopKeepAlive()
       setIsPlaying(false)
     }
   }, [currentIndex])
