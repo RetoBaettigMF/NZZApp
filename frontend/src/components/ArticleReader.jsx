@@ -39,9 +39,9 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
     return body
   }, [])
 
-  const speakArticle = useCallback((article) => {
+  const speakArticle = useCallback((article, textOverride = null) => {
     const synth = window.speechSynthesis
-    const text = getReadableText(article)
+    const text = textOverride ?? getReadableText(article)
     const utterance = new SpeechSynthesisUtterance(text)
     utterance.lang = 'de-CH'
     utterance.rate = 1.0
@@ -68,8 +68,11 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
       setIsPlaying(false)
       return
     }
-    speakArticle(currentArticle)
-  }, [isPlaying, currentArticle, speakArticle])
+    const text = showSummary && currentArticle?.summary
+      ? currentArticle.summary.replace(/\n/g, ' ').trim()
+      : null
+    speakArticle(currentArticle, text)
+  }, [isPlaying, currentArticle, speakArticle, showSummary])
 
   // Scroll to top on article change, stop audio (oder auto-weiter vorlesen)
   useEffect(() => {
