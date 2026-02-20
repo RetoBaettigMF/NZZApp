@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import './ArticleReader.css'
 
-function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArticles }) {
+const FONT_SIZES = ['0.85rem', '1rem', '1.2rem', '1.5rem']
+
+function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArticles, fontSizeLevel = 1 }) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [savedArticles, setSavedArticles] = useState(() => {
     const saved = localStorage.getItem('nzz_saved_articles')
@@ -260,6 +262,7 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
 
           <div
             className="article-content"
+            style={{ fontSize: FONT_SIZES[fontSizeLevel] }}
             dangerouslySetInnerHTML={{ __html: displayContent }}
           />
         </div>
