@@ -130,7 +130,9 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
   const onTouchMove = useCallback((e) => {
     if (touchStartX.current === null) return
     const delta = e.targetTouches[0].clientX - touchStartX.current
-    updateSwipeX(delta)
+    if (Math.abs(delta) > 10) {
+      updateSwipeX(delta)
+    }
   }, [])
 
   const onTouchEnd = useCallback(() => {
@@ -227,16 +229,6 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
 
   return (
     <div className="article-reader">
-      <div className="progress-bar">
-        <div
-          className="progress-fill"
-          style={{ width: `${((currentIndex + 1) / articles.length) * 100}%` }}
-        />
-        <span className="progress-text">
-          {currentIndex + 1} / {articles.length}
-        </span>
-      </div>
-
       <div className="article-card-wrapper">
         <div
           ref={cardRef}
@@ -247,38 +239,24 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
           onTouchEnd={onTouchEnd}
           onClick={handleCardClick}
         >
-          <div className="article-header">
-            <span className="article-category">{currentArticle.category}</span>
-            <button
-              className={`save-btn ${isSaved ? 'saved' : ''}`}
-              onClick={toggleSave}
-              title="Mit * markieren zum Behalten"
-            >
+          <div className="article-info">
+            <button className={`save-btn ${isSaved ? 'saved' : ''}`} onClick={toggleSave}>
               {isSaved ? '★' : '☆'}
             </button>
+            <span className="article-category">{currentArticle.category}</span>
+            <span className="article-date">
+              {new Date(currentArticle.date).toLocaleDateString('de-CH')}
+            </span>
+            <span className="article-count">{currentIndex + 1}/{articles.length}</span>
+            <a href={currentArticle.url} target="_blank" rel="noopener noreferrer" className="article-link">
+              ↗
+            </a>
+            {showSummary && currentArticle?.summary && (
+              <span className="summary-indicator">🤖 AI</span>
+            )}
           </div>
 
           <h2 className="article-title">{currentArticle.title}</h2>
-
-          <div className="article-meta">
-            {currentArticle.date && (
-              <span className="article-date">
-                {new Date(currentArticle.date).toLocaleDateString('de-CH')}
-              </span>
-            )}
-            <a
-              href={currentArticle.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="article-link"
-            >
-              Original öffnen ↗
-            </a>
-          </div>
-
-          {showSummary && currentArticle?.summary && (
-            <div className="summary-badge">🤖 AI-Zusammenfassung</div>
-          )}
 
           <div
             className="article-content"

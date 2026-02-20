@@ -159,15 +159,7 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>📰 NZZ Reader</h1>
-        <div className="header-controls" ref={menuRef}>
-          <ZipLoader
-            onArticlesLoaded={handleArticlesLoaded}
-            onLoading={setIsLoading}
-            onError={setError}
-            onAvailableDatesLoaded={setAvailableServerDates}
-            onLoadDateReady={(func) => setLoadDateFunc(() => func)}
-          />
+        <div className="header-left" ref={menuRef}>
           <button
             className="hamburger-btn"
             onClick={() => setMenuOpen(!menuOpen)}
@@ -202,11 +194,29 @@ function App() {
                   }}
                   title="Alle Artikel als ungelesen markieren"
                 >
-                  🔄 Zurücksetzen
+                  ↻ Zurücksetzen
                 </button>
               )}
             </div>
           )}
+        </div>
+        <h1>NZZ</h1>
+        <div className="header-controls">
+          {articles.length > 0 && availableDates.length > 0 && (
+            <DateNavigator
+              availableDates={availableDates}
+              availableServerDates={availableServerDates}
+              currentDate={currentDate}
+              onDateChange={handleDateChange}
+            />
+          )}
+          <ZipLoader
+            onArticlesLoaded={handleArticlesLoaded}
+            onLoading={setIsLoading}
+            onError={setError}
+            onAvailableDatesLoaded={setAvailableServerDates}
+            onLoadDateReady={(func) => setLoadDateFunc(() => func)}
+          />
         </div>
       </header>
 
@@ -225,15 +235,6 @@ function App() {
           <div className="spinner"></div>
           <p>Lade Artikel...</p>
         </div>
-      )}
-
-      {articles.length > 0 && availableDates.length > 0 && (
-        <DateNavigator
-          availableDates={availableDates}
-          availableServerDates={availableServerDates}
-          currentDate={currentDate}
-          onDateChange={handleDateChange}
-        />
       )}
 
       {articles.length === 0 && !isLoading ? (

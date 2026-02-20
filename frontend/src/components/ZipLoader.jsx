@@ -287,20 +287,13 @@ function ZipLoader({ onArticlesLoaded, onLoading, onError, onAvailableDatesLoade
   }
 
   return (
-    <div className="zip-loader">
-      <button 
-        className="load-btn"
-        onClick={loadLatestArticles}
-        title="Neueste Artikel laden"
-      >
-        🔄 Aktualisieren
-      </button>
-      {lastUpdate && (
-        <span className="last-update">
-          Stand: {new Date(lastUpdate).toLocaleDateString('de-CH')}
-        </span>
-      )}
-    </div>
+    <button
+      className="load-btn"
+      onClick={loadLatestArticles}
+      title="Neueste Artikel laden"
+    >
+      ↻
+    </button>
   )
 }
 

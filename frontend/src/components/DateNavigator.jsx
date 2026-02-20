@@ -41,11 +41,11 @@ function DateNavigator({ availableDates, availableServerDates, currentDate, onDa
   return (
     <div className="date-navigator">
       <button
-        className="date-nav-btn"
+        className="header-icon-btn"
         onClick={handlePrevious}
         disabled={!hasPrevious}
       >
-        ← Vorheriger Tag
+        «
       </button>
 
       <span className="date-display">
@@ -53,11 +53,11 @@ function DateNavigator({ availableDates, availableServerDates, currentDate, onDa
       </span>
 
       <button
-        className="date-nav-btn"
+        className="header-icon-btn"
         onClick={handleNext}
         disabled={!hasNext}
       >
-        Nächster Tag →
+        »
       </button>
     </div>
   )
