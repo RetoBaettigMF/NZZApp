@@ -7,12 +7,13 @@ Eine moderne Progressive Web App (PWA) zum Lesen von NZZ-Artikeln mit Offline-Su
 ### Für alle Benutzer:
 - 📱 **Progressive Web App** - Installierbar auf Desktop und Mobile
 - 🔐 **Sicheres Login-System** - JWT-basierte Authentifizierung
-- 📖 **Artikel-Reader** - Optimiert für Lesbarkeit
+- 📖 **Artikel-Reader** - Optimiert für Lesbarkeit mit Swipe-Navigation
 - 💾 **Offline-Support** - Artikel im LocalStorage speichern
 - 🗓️ **Datums-Navigation** - Durch Tage navigieren
 - ✅ **Lesefortschritt** - Artikel automatisch als gelesen markieren
 - 👁️ **Gelesene ausblenden** - Optional bereits gelesene Artikel verstecken
 - ⭐ **Artikel markieren** - Wichtige Artikel mit Stern kennzeichnen
+- 🤖 **AI-Zusammenfassung** - Doppeltipp auf Artikel schaltet zwischen Original und KI-Zusammenfassung (50–100 Wörter) um
 - 🔑 **Passwort ändern** - Eigenes Passwort jederzeit ändern
 
 ### Für Administratoren:
@@ -70,4 +71,4 @@ Passwort: 123
 
 ---
 
-**Version:** 2.0.0 | **Letzte Aktualisierung:** 19. Februar 2026
+**Version:** 2.1.0 | **Letzte Aktualisierung:** 20. Februar 2026
