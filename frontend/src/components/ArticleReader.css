@@ -57,7 +57,7 @@
 .save-btn {
   background: none;
   border: none;
-  font-size: 1rem;
+  font-size: 1.3rem;
   cursor: pointer;
   padding: 0;
   transition: transform 0.2s;
@@ -74,6 +74,21 @@
 
 .summary-indicator {
   font-size: 0.75rem;
+  color: #667eea;
+}
+
+.audio-btn {
+  background: none;
+  border: none;
+  font-size: 1.3rem;
+  color: #888;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  margin-left: auto;
+}
+
+.audio-btn.playing {
   color: #667eea;
 }
 

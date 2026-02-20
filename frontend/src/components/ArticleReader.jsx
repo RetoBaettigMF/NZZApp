@@ -13,15 +13,49 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
   const [isSwiping, setIsSwiping] = useState(false)
   const [isAnimating, setIsAnimating] = useState(false)
   const [showSummary, setShowSummary] = useState(false)
+  const [isPlaying, setIsPlaying] = useState(false)
   const cardRef = useRef(null)
   const touchStartX = useRef(null)
   const swipeXRef = useRef(0)
   const lastTapRef = useRef(0)
+  const utteranceRef = useRef(null)
 
   const currentArticle = articles[currentIndex]
 
-  // Scroll to top on article change
+  const getReadableText = useCallback((article) => {
+    const body = (article.rawContent || '')
+      .replace(/#{1,6}\s/g, '')
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .replace(/\*(.*?)\*/g, '$1')
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .replace(/[-*]\s/g, '')
+      .replace(/\n{2,}/g, '. ')
+      .trim()
+    return `${article.title}. ${body}`
+  }, [])
+
+  const toggleAudio = useCallback(() => {
+    const synth = window.speechSynthesis
+    if (isPlaying) {
+      synth.cancel()
+      setIsPlaying(false)
+      return
+    }
+    const text = getReadableText(currentArticle)
+    const utterance = new SpeechSynthesisUtterance(text)
+    utterance.lang = 'de-CH'
+    utterance.rate = 1.0
+    utterance.onend = () => setIsPlaying(false)
+    utterance.onerror = () => setIsPlaying(false)
+    utteranceRef.current = utterance
+    synth.speak(utterance)
+    setIsPlaying(true)
+  }, [isPlaying, currentArticle, getReadableText])
+
+  // Scroll to top on article change, stop audio
   useEffect(() => {
+    window.speechSynthesis.cancel()
+    setIsPlaying(false)
     window.scrollTo(0, 0)
     if (cardRef.current) {
       cardRef.current.scrollTop = 0
@@ -242,9 +276,6 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
           onClick={handleCardClick}
         >
           <div className="article-info">
-            <button className={`save-btn ${isSaved ? 'saved' : ''}`} onClick={toggleSave}>
-              {isSaved ? '★' : '☆'}
-            </button>
             <span className="article-category">{currentArticle.category}</span>
             <span className="article-date">
               {new Date(currentArticle.date).toLocaleDateString('de-CH')}
@@ -256,6 +287,16 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
             {showSummary && currentArticle?.summary && (
               <span className="summary-indicator">🤖 AI</span>
             )}
+            <button
+              className={`audio-btn ${isPlaying ? 'playing' : ''}`}
+              onClick={(e) => { e.stopPropagation(); toggleAudio() }}
+              title={isPlaying ? 'Vorlesen stoppen' : 'Artikel vorlesen'}
+            >
+              {isPlaying ? '⏸' : '▶'}
+            </button>
+            <button className={`save-btn ${isSaved ? 'saved' : ''}`} onClick={toggleSave}>
+              {isSaved ? '★' : '☆'}
+            </button>
           </div>
 
           <h2 className="article-title">{currentArticle.title}</h2>
