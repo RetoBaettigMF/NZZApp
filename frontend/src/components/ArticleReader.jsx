@@ -196,7 +196,7 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
   const onTouchMove = useCallback((e) => {
     if (touchStartX.current === null) return
     const delta = e.targetTouches[0].clientX - touchStartX.current
-    if (Math.abs(delta) > 10) {
+    if (Math.abs(delta) > window.innerWidth * 0.08) {
       updateSwipeX(delta)
     }
   }, [])
