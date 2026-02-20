@@ -126,6 +126,18 @@
   text-decoration: underline;
 }
 
+.summary-badge {
+  display: inline-block;
+  background: rgba(102, 126, 234, 0.1);
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  color: #667eea;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.2rem 0.6rem;
+  border-radius: 12px;
+  margin-bottom: 0.75rem;
+}
+
 .article-content {
   font-size: 1rem;
   line-height: 1.7;

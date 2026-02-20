@@ -124,6 +124,75 @@ class OpenRouterClient:
 **OUTPUT:**
 Gib NUR den bereinigten Markdown-Text zurück, OHNE zusätzliche Erklärungen oder Kommentare."""
 
+    def generate_summary(self, content: str, title: str) -> Optional[str]:
+        """
+        Erstellt eine kurze Zusammenfassung des Artikels (50-100 Wörter).
+
+        Args:
+            content: Bereinigter Markdown-Content des Artikels
+            title: Artikel-Titel für Kontext
+
+        Returns:
+            Zusammenfassung als plain text oder None bei Fehler
+        """
+        # Rate limiting: wait if needed
+        elapsed = time.time() - self.last_request_time
+        if elapsed < self.min_request_interval:
+            time.sleep(self.min_request_interval - elapsed)
+
+        prompt = f"""Erstelle eine Zusammenfassung des folgenden Artikels in 50-100 Wörtern auf Deutsch.
+
+**ARTIKEL-TITEL:** {title}
+
+**ARTIKEL-INHALT:**
+{content[:3000]}
+
+**ANWEISUNGEN:**
+- Fasse die wichtigsten Punkte des Artikels zusammen
+- Schreibe in verständlichem, fließendem Deutsch
+- Gib NUR die Zusammenfassung zurück, ohne Titel, ohne Überschriften, ohne Erklärungen"""
+
+        try:
+            self.last_request_time = time.time()
+            response = requests.post(
+                self.base_url,
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": self.model,
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": "Du bist ein Experte für das Zusammenfassen von Nachrichtenartikeln auf Deutsch."
+                        },
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ],
+                    "temperature": 0.3,
+                },
+                timeout=30
+            )
+
+            response.raise_for_status()
+            result = response.json()
+
+            summary = result['choices'][0]['message']['content'].strip()
+            return summary
+
+        except requests.exceptions.Timeout:
+            print(f"  ⚠ OpenRouter Timeout bei Zusammenfassung")
+            return None
+        except requests.exceptions.RequestException as e:
+            print(f"  ⚠ OpenRouter API Fehler bei Zusammenfassung: {e}")
+            return None
+        except (KeyError, IndexError) as e:
+            print(f"  ⚠ Ungültiges Response-Format bei Zusammenfassung: {e}")
+            return None
+
     def test_connection(self) -> bool:
         """Testet die Verbindung zur OpenRouter API."""
         try:

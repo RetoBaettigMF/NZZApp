@@ -365,6 +365,7 @@ class NZZScraper:
             content = self.clean_markdown_content(content)
 
             # AI-BASED CLEANING (NEW)
+            summary = ''
             if self.ai_client:
                 print(f"    🤖 Bereinige Inhalt mit AI...")
                 cleaned_content = self.ai_client.clean_article_content(content, title)
@@ -374,6 +375,14 @@ class NZZScraper:
                     print(f"    ✓ AI-Bereinigung erfolgreich ({len(content)} Zeichen)")
                 else:
                     print(f"    ⚠ AI-Bereinigung fehlgeschlagen, verwende Original")
+
+                print(f"    🤖 Erstelle Zusammenfassung...")
+                generated_summary = self.ai_client.generate_summary(content, title)
+                if generated_summary:
+                    summary = generated_summary
+                    print(f"    ✓ Zusammenfassung erstellt ({len(summary)} Zeichen)")
+                else:
+                    print(f"    ⚠ Zusammenfassung fehlgeschlagen")
 
             # Kategorie bestimmen
             category = self.extract_category(soup, url)
@@ -390,7 +399,8 @@ class NZZScraper:
                 'url': url,
                 'date': date.isoformat(),
                 'category': category,
-                'content': content
+                'content': content,
+                'summary': summary
             }
 
         except Exception as e:
@@ -437,6 +447,7 @@ class NZZScraper:
             content = self.clean_markdown_content(content)
 
             # AI-BASED CLEANING (NEW)
+            summary = ''
             if self.ai_client:
                 print(f"    🤖 Bereinige Inhalt mit AI...")
                 cleaned_content = self.ai_client.clean_article_content(content, title)
@@ -446,6 +457,14 @@ class NZZScraper:
                     print(f"    ✓ AI-Bereinigung erfolgreich ({len(content)} Zeichen)")
                 else:
                     print(f"    ⚠ AI-Bereinigung fehlgeschlagen, verwende Original")
+
+                print(f"    🤖 Erstelle Zusammenfassung...")
+                generated_summary = self.ai_client.generate_summary(content, title)
+                if generated_summary:
+                    summary = generated_summary
+                    print(f"    ✓ Zusammenfassung erstellt ({len(summary)} Zeichen)")
+                else:
+                    print(f"    ⚠ Zusammenfassung fehlgeschlagen")
 
             # Kategorie bestimmen
             category = self.extract_category(soup, url)
@@ -462,9 +481,10 @@ class NZZScraper:
                 'url': url,
                 'date': date.isoformat(),
                 'category': category,
-                'content': content
+                'content': content,
+                'summary': summary
             }
-            
+
         except Exception as e:
             print(f"✗ Fehler beim Scrapen von {url}: {e}")
             return None
@@ -578,6 +598,8 @@ class NZZScraper:
                 f.write(f"**[→ Original auf NZZ.ch öffnen]({article['url']})**\n\n")
                 f.write(f"**Datum:** {article['date']}\n\n")
                 f.write(f"**Kategorie:** {article['category']}\n\n")
+                if article.get('summary'):
+                    f.write(f"**Zusammenfassung:** {article['summary']}\n\n")
                 f.write(f"---\n\n")
                 f.write(article['content'])
 

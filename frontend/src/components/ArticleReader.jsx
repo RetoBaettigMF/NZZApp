@@ -10,9 +10,11 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
   const [swipeX, setSwipeX] = useState(0)
   const [isSwiping, setIsSwiping] = useState(false)
   const [isAnimating, setIsAnimating] = useState(false)
+  const [showSummary, setShowSummary] = useState(false)
   const cardRef = useRef(null)
   const touchStartX = useRef(null)
   const swipeXRef = useRef(0)
+  const lastTapRef = useRef(0)
 
   const currentArticle = articles[currentIndex]
 
@@ -190,6 +192,19 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
     return parts.slice(2).join('<br>').replace(/^(<br>\s*)+/, '')
   }, [currentArticle])
 
+  // Doppeltap/Doppelklick: zwischen Original und Zusammenfassung umschalten
+  const handleCardClick = useCallback(() => {
+    const now = Date.now()
+    if (now - lastTapRef.current < 300 && currentArticle?.summary) {
+      setShowSummary(prev => !prev)
+    }
+    lastTapRef.current = now
+  }, [currentArticle])
+
+  const displayContent = showSummary && currentArticle?.summary
+    ? currentArticle.summary.replace(/\n/g, '<br>')
+    : cleanedContent
+
   const isSaved = currentArticle && savedArticles.includes(currentArticle.id || currentArticle.url)
 
   const cardStyle = {
@@ -230,6 +245,7 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
           onTouchStart={onTouchStart}
           onTouchMove={onTouchMove}
           onTouchEnd={onTouchEnd}
+          onClick={handleCardClick}
         >
           <div className="article-header">
             <span className="article-category">{currentArticle.category}</span>
@@ -260,9 +276,13 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
             </a>
           </div>
 
+          {showSummary && currentArticle?.summary && (
+            <div className="summary-badge">🤖 AI-Zusammenfassung</div>
+          )}
+
           <div
             className="article-content"
-            dangerouslySetInnerHTML={{ __html: cleanedContent }}
+            dangerouslySetInnerHTML={{ __html: displayContent }}
           />
         </div>
       </div>

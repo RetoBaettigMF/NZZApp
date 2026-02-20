@@ -200,6 +200,7 @@ function ZipLoader({ onArticlesLoaded, onLoading, onError, onAvailableDatesLoade
       let date = ''
       let category = 'allgemein'
       let url = ''
+      let summary = ''
       let bodyStart = 0
 
       for (let i = 0; i < lines.length; i++) {
@@ -218,6 +219,11 @@ function ZipLoader({ onArticlesLoaded, onLoading, onError, onAvailableDatesLoade
           const katMatch = line.match(/\*?\*?Kategorie:\*?\*?\s*(.+)/)
           if (katMatch) {
             category = katMatch[1].trim()
+          }
+        } else if (line.includes('Zusammenfassung:')) {
+          const summaryMatch = line.match(/\*?\*?Zusammenfassung:\*?\*?\s*(.+)/)
+          if (summaryMatch) {
+            summary = summaryMatch[1].trim()
           }
         } else if (line.includes('Original auf NZZ.ch öffnen') || line.includes('URL:')) {
           // Extrahiere URL aus Markdown-Link: [Text](URL)
@@ -270,7 +276,8 @@ function ZipLoader({ onArticlesLoaded, onLoading, onError, onAvailableDatesLoade
         category: category.toLowerCase(),
         url: url || '',
         content: htmlContent,
-        rawContent: body
+        rawContent: body,
+        summary: summary
       }
 
     } catch (e) {
