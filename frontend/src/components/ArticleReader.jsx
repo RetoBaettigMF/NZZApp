@@ -19,8 +19,13 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
   const swipeXRef = useRef(0)
   const lastTapRef = useRef(0)
   const utteranceRef = useRef(null)
+  const autoPlayRef = useRef(false)
+  const currentIndexRef = useRef(0)
+  const handleNextRef = useRef(null)
+  const speakArticleRef = useRef(null)
 
   const currentArticle = articles[currentIndex]
+  currentIndexRef.current = currentIndex
 
   const getReadableText = useCallback((article) => {
     const body = (article.rawContent || '')
@@ -34,6 +39,28 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
     return `${article.title}. ${body}`
   }, [])
 
+  const speakArticle = useCallback((article) => {
+    const synth = window.speechSynthesis
+    const text = getReadableText(article)
+    const utterance = new SpeechSynthesisUtterance(text)
+    utterance.lang = 'de-CH'
+    utterance.rate = 1.0
+    utterance.onend = () => {
+      if (currentIndexRef.current < articles.length - 1) {
+        autoPlayRef.current = true
+        handleNextRef.current?.()
+      } else {
+        setIsPlaying(false)
+      }
+    }
+    utterance.onerror = () => setIsPlaying(false)
+    utteranceRef.current = utterance
+    synth.speak(utterance)
+    setIsPlaying(true)
+  }, [getReadableText, articles.length])
+
+  speakArticleRef.current = speakArticle
+
   const toggleAudio = useCallback(() => {
     const synth = window.speechSynthesis
     if (isPlaying) {
@@ -41,24 +68,22 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
       setIsPlaying(false)
       return
     }
-    const text = getReadableText(currentArticle)
-    const utterance = new SpeechSynthesisUtterance(text)
-    utterance.lang = 'de-CH'
-    utterance.rate = 1.0
-    utterance.onend = () => setIsPlaying(false)
-    utterance.onerror = () => setIsPlaying(false)
-    utteranceRef.current = utterance
-    synth.speak(utterance)
-    setIsPlaying(true)
-  }, [isPlaying, currentArticle, getReadableText])
+    speakArticle(currentArticle)
+  }, [isPlaying, currentArticle, speakArticle])
 
-  // Scroll to top on article change, stop audio
+  // Scroll to top on article change, stop audio (oder auto-weiter vorlesen)
   useEffect(() => {
     window.speechSynthesis.cancel()
-    setIsPlaying(false)
     window.scrollTo(0, 0)
     if (cardRef.current) {
       cardRef.current.scrollTop = 0
+    }
+    if (autoPlayRef.current) {
+      autoPlayRef.current = false
+      const article = articles[currentIndex]
+      if (article) speakArticleRef.current(article)
+    } else {
+      setIsPlaying(false)
     }
   }, [currentIndex])
 
@@ -124,6 +149,8 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
       alert('Du bist bereits beim ältesten Artikel')
     }
   }, [currentIndex, articles.length, isAnimating, animateAway, markRead, hideReadArticles])
+
+  handleNextRef.current = handleNext
 
   const handlePrevious = useCallback(() => {
     if (isAnimating) return

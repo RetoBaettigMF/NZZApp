@@ -58,6 +58,7 @@
   background: none;
   border: none;
   font-size: 1.3rem;
+  color: #444;
   cursor: pointer;
   padding: 0;
   transition: transform 0.2s;
