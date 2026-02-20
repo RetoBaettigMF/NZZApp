@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
+import { BUILD } from '../version'
 import './UserMenu.css'
 
 function UserMenu({ onShowAdmin, onShowHelp }) {
@@ -94,6 +95,8 @@ function UserMenu({ onShowAdmin, onShowHelp }) {
       <button className="menu-item logout" onClick={logout}>
         Abmelden
       </button>
+
+      <div className="menu-version">Build {BUILD}</div>
     </div>
   )
 }

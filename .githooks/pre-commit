@@ -1,0 +1,14 @@
+#!/bin/bash
+# Inkrementiert die Build-Nummer in frontend/src/version.js vor jedem Commit
+
+VERSION_FILE="frontend/src/version.js"
+
+if [ ! -f "$VERSION_FILE" ]; then
+  echo "version.js nicht gefunden, überspringe Build-Nummer"
+  exit 0
+fi
+
+CURRENT=$(grep -oP '(?<=BUILD = )\d+' "$VERSION_FILE")
+NEW=$((CURRENT + 1))
+sed -i "s/BUILD = $CURRENT/BUILD = $NEW/" "$VERSION_FILE"
+git add "$VERSION_FILE"
