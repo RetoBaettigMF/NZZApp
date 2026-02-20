@@ -23,9 +23,21 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
   const currentIndexRef = useRef(0)
   const handleNextRef = useRef(null)
   const speakArticleRef = useRef(null)
+  const wakeLockRef = useRef(null)
 
   const currentArticle = articles[currentIndex]
   currentIndexRef.current = currentIndex
+
+  const acquireWakeLock = async () => {
+    try {
+      wakeLockRef.current = await navigator.wakeLock?.request('screen')
+    } catch (e) {}
+  }
+
+  const releaseWakeLock = () => {
+    wakeLockRef.current?.release()
+    wakeLockRef.current = null
+  }
 
   const getReadableText = useCallback((article) => {
     const body = (article.rawContent || '')
@@ -40,6 +52,7 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
   }, [])
 
   const speakArticle = useCallback((article, textOverride = null) => {
+    acquireWakeLock()
     const synth = window.speechSynthesis
     const text = textOverride ?? getReadableText(article)
     const utterance = new SpeechSynthesisUtterance(text)
@@ -50,10 +63,11 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
         autoPlayRef.current = true
         handleNextRef.current?.()
       } else {
+        releaseWakeLock()
         setIsPlaying(false)
       }
     }
-    utterance.onerror = () => setIsPlaying(false)
+    utterance.onerror = () => { releaseWakeLock(); setIsPlaying(false) }
     utteranceRef.current = utterance
     synth.speak(utterance)
     setIsPlaying(true)
@@ -65,6 +79,7 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
     const synth = window.speechSynthesis
     if (isPlaying) {
       synth.cancel()
+      releaseWakeLock()
       setIsPlaying(false)
       return
     }
@@ -86,6 +101,7 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
       const article = articles[currentIndex]
       if (article) setTimeout(() => speakArticleRef.current(article), 150)
     } else {
+      releaseWakeLock()
       setIsPlaying(false)
     }
   }, [currentIndex])
