@@ -275,6 +275,13 @@ body {
   transform: translateY(-1px);
 }
 
+.menu-version {
+  padding: 0.75rem 1rem;
+  font-size: 0.75rem;
+  color: #bbb;
+  text-align: center;
+}
+
 @media (max-width: 768px) {
   .app-header {
     padding: 0.75rem;

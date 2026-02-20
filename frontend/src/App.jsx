@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import './App.css'
 import { useAuth } from './contexts/AuthContext'
+import { BUILD } from './version'
 import Login from './components/Login'
 import ArticleReader from './components/ArticleReader'
 import DateNavigator from './components/DateNavigator'
@@ -226,6 +227,8 @@ function App() {
                   ↻ Zurücksetzen
                 </button>
               )}
+
+              <div className="menu-version">Build {BUILD}</div>
             </div>
           )}
         </div>
