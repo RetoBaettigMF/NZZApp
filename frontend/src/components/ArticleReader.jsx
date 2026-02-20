@@ -84,7 +84,7 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
     if (autoPlayRef.current) {
       autoPlayRef.current = false
       const article = articles[currentIndex]
-      if (article) speakArticleRef.current(article)
+      if (article) setTimeout(() => speakArticleRef.current(article), 150)
     } else {
       setIsPlaying(false)
     }
