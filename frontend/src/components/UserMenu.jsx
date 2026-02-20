@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import './UserMenu.css'
 
-function UserMenu({ onShowAdmin }) {
+function UserMenu({ onShowAdmin, onShowHelp }) {
   const { user, logout, changePassword } = useAuth()
   const [showChangePassword, setShowChangePassword] = useState(false)
   const [oldPassword, setOldPassword] = useState('')
@@ -33,8 +33,10 @@ function UserMenu({ onShowAdmin }) {
   return (
     <div className="user-menu">
       <div className="user-info-menu">
-        <div className="user-email">{user.email}</div>
-        {user.is_admin && <span className="admin-badge">Admin</span>}
+        <div className="user-email">
+          {user.email}
+          {user.is_admin && <span className="admin-hint"> (Admin)</span>}
+        </div>
       </div>
 
       <div className="menu-divider"></div>
@@ -42,7 +44,7 @@ function UserMenu({ onShowAdmin }) {
       {user.is_admin && (
         <>
           <button className="menu-item" onClick={onShowAdmin}>
-            👥 User-Verwaltung
+            User-Verwaltung
           </button>
           <div className="menu-divider"></div>
         </>
@@ -52,7 +54,7 @@ function UserMenu({ onShowAdmin }) {
         className="menu-item"
         onClick={() => setShowChangePassword(!showChangePassword)}
       >
-        🔑 Passwort ändern
+        Passwort ändern
       </button>
 
       {showChangePassword && (
@@ -83,8 +85,14 @@ function UserMenu({ onShowAdmin }) {
 
       <div className="menu-divider"></div>
 
+      <button className="menu-item" onClick={onShowHelp}>
+        Hilfe
+      </button>
+
+      <div className="menu-divider"></div>
+
       <button className="menu-item logout" onClick={logout}>
-        🚪 Abmelden
+        Abmelden
       </button>
     </div>
   )

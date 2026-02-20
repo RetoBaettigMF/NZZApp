@@ -7,6 +7,7 @@ import DateNavigator from './components/DateNavigator'
 import ZipLoader from './components/ZipLoader'
 import UserMenu from './components/UserMenu'
 import AdminPanel from './components/AdminPanel'
+import HelpModal from './components/HelpModal'
 
 function App() {
   const { isAuthenticated, loading: authLoading } = useAuth()
@@ -26,6 +27,10 @@ function App() {
   })
   const [menuOpen, setMenuOpen] = useState(false)
   const [showAdminPanel, setShowAdminPanel] = useState(false)
+  const [showHelp, setShowHelp] = useState(false)
+  const [fontSizeLevel, setFontSizeLevel] = useState(() => {
+    return parseInt(localStorage.getItem('nzz_font_size') || '1', 10)
+  })
   const menuRef = useRef(null)
 
   // Schließe Menü beim Klick außerhalb
@@ -174,6 +179,10 @@ function App() {
                   setShowAdminPanel(true)
                   setMenuOpen(false)
                 }}
+                onShowHelp={() => {
+                  setShowHelp(true)
+                  setMenuOpen(false)
+                }}
               />
               <div className="menu-divider"></div>
               <label className="menu-toggle">
@@ -185,6 +194,26 @@ function App() {
                 <span className="toggle-slider"></span>
                 <span className="toggle-label">Gelesene Artikel ausblenden</span>
               </label>
+              <div className="menu-divider"></div>
+              <div className="font-size-control">
+                <span className="font-size-label">Schriftgrösse</span>
+                <div className="font-size-buttons">
+                  {['a', 'A', 'A', 'A'].map((_, i) => (
+                    <button
+                      key={i}
+                      className={`font-size-btn ${fontSizeLevel === i ? 'active' : ''}`}
+                      style={{ fontSize: `${0.75 + i * 0.2}rem` }}
+                      onClick={() => {
+                        setFontSizeLevel(i)
+                        localStorage.setItem('nzz_font_size', i)
+                      }}
+                    >
+                      A
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {hideReadArticles && (
                 <button
                   className="reset-read-btn"
@@ -224,6 +253,10 @@ function App() {
         <AdminPanel onClose={() => setShowAdminPanel(false)} />
       )}
 
+      {showHelp && (
+        <HelpModal onClose={() => setShowHelp(false)} />
+      )}
+
       {error && (
         <div className="error-banner">
           {error}
@@ -250,6 +283,7 @@ function App() {
           onArticlesUpdate={handleArticleUpdate}
           onArticleRead={handleArticleRead}
           hideReadArticles={hideReadArticles}
+          fontSizeLevel={fontSizeLevel}
         />
       )}
     </div>
