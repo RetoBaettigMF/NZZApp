@@ -74,27 +74,30 @@ class NZZScraper:
             except:
                 pass  # No cookie consent dialog
 
-            # Click login button
-            page.click('text=Anmelden', timeout=10000)
+            # Click login button (force=True umgeht allfällige Overlays)
+            page.locator('text=Anmelden').first.click(force=True, timeout=10000)
 
-            # Wait for Piano iframe to load
-            page.wait_for_timeout(3000)
-
-            # Find the Piano iframe
+            # Warte aktiv bis id-eu.piano.io geladen ist (max. 15s)
+            # Hostname-Vergleich statt Substring (buy-eu.piano.io enthält id-eu.piano.io im Query-String)
+            from urllib.parse import urlparse
             login_frame = None
-            for frame in page.frames:
-                if 'piano.io' in frame.url:
-                    login_frame = frame
+            for _ in range(30):
+                page.wait_for_timeout(500)
+                for frame in page.frames:
+                    if urlparse(frame.url).hostname == 'id-eu.piano.io':
+                        login_frame = frame
+                        break
+                if login_frame:
                     break
 
             if not login_frame:
-                raise Exception("Could not find Piano login iframe")
+                raise Exception("Could not find Piano login iframe (id-eu.piano.io)")
 
             # Wait for inputs to be ready
-            login_frame.wait_for_selector('input[type="text"]', timeout=10000)
+            login_frame.wait_for_selector('input[name="email"]', timeout=10000)
 
             # Fill credentials in iframe
-            login_frame.fill('input[type="text"]', self.email)
+            login_frame.fill('input[name="email"]', self.email)
             login_frame.fill('input[type="password"]', self.password)
 
             # Submit form
