@@ -185,9 +185,65 @@ class NZZScraper:
         tracking_data['articles'].append({
             'url': article_info['url'],
             'scraped_date': date_str,
+            'scraped_at': datetime.now().isoformat(),
             'filename': f"{date_str}/{article_info['category']}/{article_info.get('filename', 'unknown.md')}",
             'title': article_info['title']
         })
+
+    def delete_recent_articles(self, hours=12):
+        """Löscht Artikel der letzten N Stunden und entfernt sie aus dem Tracking."""
+        print(f"\n→ Lösche Artikel der letzten {hours} Stunden...")
+        cutoff = datetime.now() - timedelta(hours=hours)
+
+        tracking_data = self.load_tracked_articles()
+        urls_to_remove = set()
+        affected_dates = set()
+
+        for article in tracking_data['articles']:
+            # Prüfe scraped_at Timestamp (neu) oder Datei-Mtime (alt)
+            remove = False
+            scraped_at = article.get('scraped_at')
+            if scraped_at:
+                try:
+                    if datetime.fromisoformat(scraped_at) >= cutoff:
+                        remove = True
+                except ValueError:
+                    pass
+
+            if not remove:
+                # Fallback: Datei-Mtime prüfen
+                filepath = self.output_dir / article.get('filename', '')
+                if filepath.exists() and datetime.fromtimestamp(filepath.stat().st_mtime) >= cutoff:
+                    remove = True
+
+            if remove:
+                urls_to_remove.add(article['url'])
+                affected_dates.add(article.get('scraped_date', ''))
+                # Datei löschen
+                filepath = self.output_dir / article.get('filename', '')
+                if filepath.exists():
+                    filepath.unlink()
+                    print(f"  ✗ Gelöscht: {filepath.name}")
+
+        # Tracking bereinigen
+        before = len(tracking_data['articles'])
+        tracking_data['articles'] = [
+            a for a in tracking_data['articles'] if a['url'] not in urls_to_remove
+        ]
+        removed = before - len(tracking_data['articles'])
+        self.save_tracked_articles(tracking_data)
+
+        # ZIP und Manifest für betroffene Tage neu erstellen
+        for date_str in affected_dates:
+            if not date_str:
+                continue
+            date_folder = self.output_dir / date_str
+            if date_folder.exists():
+                self.create_zip(date_folder)
+                self.update_manifest(date_folder)
+
+        print(f"✓ {removed} Artikel gelöscht und aus Tracking entfernt")
+        return removed
 
     def clean_article_html(self, soup):
         """Grundlegende HTML-Bereinigung (Bilder, Scripts, Ads)."""
@@ -723,7 +779,23 @@ class NZZScraper:
 
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(description='NZZ Artikel Scraper')
+    parser.add_argument(
+        '--rescrape',
+        nargs='?',
+        const=12,
+        type=int,
+        metavar='STUNDEN',
+        help='Löscht Artikel der letzten N Stunden und scrapt neu (Standard: 12)'
+    )
+    args = parser.parse_args()
+
     scraper = NZZScraper()
+
+    if args.rescrape is not None:
+        scraper.delete_recent_articles(hours=args.rescrape)
+
     scraper.run()
 
 
