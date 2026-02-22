@@ -3,12 +3,8 @@ import './ArticleReader.css'
 
 const FONT_SIZES = ['0.85rem', '1rem', '1.2rem', '1.5rem']
 
-function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArticles, fontSizeLevel = 1 }) {
+function ArticleReader({ articles, onArticleRead, hideReadArticles, fontSizeLevel = 1, savedArticles, onSaveToggle }) {
   const [currentIndex, setCurrentIndex] = useState(0)
-  const [savedArticles, setSavedArticles] = useState(() => {
-    const saved = localStorage.getItem('nzz_saved_articles')
-    return saved ? JSON.parse(saved) : []
-  })
   const [swipeX, setSwipeX] = useState(0)
   const [isSwiping, setIsSwiping] = useState(false)
   const [isAnimating, setIsAnimating] = useState(false)
@@ -120,11 +116,6 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
     }
   }, [articles.length, currentIndex])
 
-  // Speichere markierte Artikel
-  useEffect(() => {
-    localStorage.setItem('nzz_saved_articles', JSON.stringify(savedArticles))
-  }, [savedArticles])
-
   // Speichere aktuelle Leseposition bei jedem Artikel-Wechsel
   useEffect(() => {
     if (currentArticle) {
@@ -197,15 +188,8 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
 
   const toggleSave = useCallback(() => {
     if (!currentArticle) return
-    const articleId = currentArticle.id || currentArticle.url
-    setSavedArticles(prev => {
-      if (prev.includes(articleId)) {
-        return prev.filter(id => id !== articleId)
-      } else {
-        return [...prev, articleId]
-      }
-    })
-  }, [currentArticle])
+    onSaveToggle(currentArticle.id || currentArticle.url)
+  }, [currentArticle, onSaveToggle])
 
   const jumpToNewest = useCallback(() => {
     markRead()
@@ -270,14 +254,6 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [handleNext, handlePrevious, toggleSave])
-
-  const deleteCurrentArticle = () => {
-    const updatedArticles = articles.filter((_, idx) => idx !== currentIndex)
-    onArticlesUpdate(updatedArticles)
-    if (currentIndex >= updatedArticles.length && currentIndex > 0) {
-      setCurrentIndex(currentIndex - 1)
-    }
-  }
 
   // Entferne die ersten 2 Zeilen (Wiederholung des Titels)
   // Normalisiere \n zu <br> damit beide Formate funktionieren
@@ -383,15 +359,6 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
           title="Zum neuesten Artikel springen"
         >
           🔝 Neuester Artikel
-        </button>
-
-        <button
-          className="control-btn delete"
-          onClick={deleteCurrentArticle}
-          disabled={isSaved}
-          title={isSaved ? 'Markierte Artikel können nicht gelöscht werden' : 'Artikel löschen'}
-        >
-          🗑 Löschen
         </button>
 
         <button

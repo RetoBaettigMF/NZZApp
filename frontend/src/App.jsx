@@ -35,6 +35,10 @@ function App() {
     const saved = localStorage.getItem('nzz_read_articles')
     return saved ? JSON.parse(saved) : []
   })
+  const [savedArticles, setSavedArticles] = useState(() => {
+    const saved = localStorage.getItem('nzz_saved_articles')
+    return saved ? JSON.parse(saved) : []
+  })
   const [menuOpen, setMenuOpen] = useState(false)
   const [showAdminPanel, setShowAdminPanel] = useState(false)
   const [showHelp, setShowHelp] = useState(false)
@@ -86,6 +90,11 @@ function App() {
     localStorage.setItem('nzz_read_articles', JSON.stringify(readArticles))
   }, [readArticles])
 
+  // Speichere markierte Artikel
+  useEffect(() => {
+    localStorage.setItem('nzz_saved_articles', JSON.stringify(savedArticles))
+  }, [savedArticles])
+
   // PWA Update-Handling
   useEffect(() => {
     if (needRefresh) {
@@ -116,6 +125,16 @@ function App() {
         return [...prev, articleId]
       }
       return prev
+    })
+  }
+
+  const handleSaveToggle = (articleId) => {
+    setSavedArticles(prev => {
+      if (prev.includes(articleId)) {
+        return prev.filter(id => id !== articleId)
+      } else {
+        return [...prev, articleId]
+      }
     })
   }
 
@@ -165,8 +184,8 @@ function App() {
       }
     }
 
-    // Gelesene Artikel Filter
-    if (hideReadArticles && readArticles.includes(a.id)) {
+    // Gelesene Artikel Filter – markierte Artikel immer anzeigen
+    if (hideReadArticles && readArticles.includes(a.id) && !savedArticles.includes(a.id)) {
       return false
     }
 
@@ -315,10 +334,11 @@ function App() {
       ) : (
         <ArticleReader
           articles={filteredArticles}
-          onArticlesUpdate={handleArticleUpdate}
           onArticleRead={handleArticleRead}
           hideReadArticles={hideReadArticles}
           fontSizeLevel={fontSizeLevel}
+          savedArticles={savedArticles}
+          onSaveToggle={handleSaveToggle}
         />
       )}
     </div>
