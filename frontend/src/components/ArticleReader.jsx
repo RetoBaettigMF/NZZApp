@@ -28,7 +28,11 @@ function ArticleReader({ articles, onArticleRead, hideReadArticles, fontSizeLeve
   articlesLengthRef.current = articles.length
 
   const getArticleText = (article) => {
-    const body = (article.rawContent || '')
+    const lines = (article.rawContent || '').split('\n')
+    // Erste Zeile überspringen wenn sie dem Titel entspricht (mit oder ohne # Prefix)
+    const firstLine = lines[0]?.replace(/^#+\s*/, '').trim()
+    const bodyLines = firstLine === article.title?.trim() ? lines.slice(1) : lines
+    const body = bodyLines.join('\n')
       .replace(/^#{1,6}\s+/gm, '')
       .replace(/\*\*(.+?)\*\*/g, '$1')
       .replace(/\*(.+?)\*/g, '$1')
