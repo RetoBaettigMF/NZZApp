@@ -14,7 +14,6 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
   const [isAnimating, setIsAnimating] = useState(false)
   const [showSummary, setShowSummary] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
-  const [ttsError, setTtsError] = useState(null)
   const [entranceDir, setEntranceDir] = useState(null)
   const cardRef = useRef(null)
   const touchStartX = useRef(null)
@@ -22,132 +21,97 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
   const lastTapRef = useRef(0)
   const utteranceRef = useRef(null)
   const autoPlayRef = useRef(false)
+  const isPlayingRef = useRef(false)
   const currentIndexRef = useRef(0)
   const handleNextRef = useRef(null)
-  const speakArticleRef = useRef(null)
-  const wakeLockRef = useRef(null)
-  const iosWatchdogRef = useRef(null)
+  const articlesLengthRef = useRef(0)
 
   const currentArticle = articles[currentIndex]
   currentIndexRef.current = currentIndex
+  articlesLengthRef.current = articles.length
 
-  const acquireWakeLock = async () => {
-    try {
-      wakeLockRef.current = await navigator.wakeLock?.request('screen')
-    } catch (e) {}
-  }
-
-  const releaseWakeLock = () => {
-    wakeLockRef.current?.release()
-    wakeLockRef.current = null
-    clearInterval(iosWatchdogRef.current)
-    iosWatchdogRef.current = null
-  }
-
-  const getReadableText = useCallback((article) => {
+  const getArticleText = (article) => {
     const body = (article.rawContent || '')
-      .replace(/#{1,6}\s/g, '')
-      .replace(/\*\*(.*?)\*\*/g, '$1')
-      .replace(/\*(.*?)\*/g, '$1')
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-      .replace(/[-*]\s/g, '')
-      .replace(/\n{2,}/g, '. ')
+      .replace(/^#{1,6}\s+/gm, '')
+      .replace(/\*\*(.+?)\*\*/g, '$1')
+      .replace(/\*(.+?)\*/g, '$1')
+      .replace(/\[(.+?)\]\(.+?\)/g, '$1')
+      .replace(/^[-*]\s+/gm, '')
+      .replace(/\n{3,}/g, '\n\n')
       .trim()
     return `${article.title}. ${body}`
+  }
+
+  const stopReading = useCallback(() => {
+    window.speechSynthesis?.cancel()
+    autoPlayRef.current = false
+    setIsPlaying(false)
+    isPlayingRef.current = false
   }, [])
 
-  const speakArticle = useCallback((article, textOverride = null) => {
-    if (!('speechSynthesis' in window)) {
-      setTtsError('Vorlesen wird auf diesem Gerät nicht unterstützt.')
-      setTimeout(() => setTtsError(null), 4000)
-      return
-    }
-    acquireWakeLock()
+  const startReading = useCallback((article) => {
+    if (!window.speechSynthesis) return
     const synth = window.speechSynthesis
     synth.cancel()
-    const text = textOverride ?? getReadableText(article)
+    const text = getArticleText(article)
     const utterance = new SpeechSynthesisUtterance(text)
-    // Voice selection: de-CH → de-DE fallback
     const voices = synth.getVoices()
-    const voice = voices.find(v => v.lang === 'de-CH') || voices.find(v => v.lang === 'de-DE')
-    if (voice) utterance.voice = voice
+    utterance.voice = voices.find(v => v.lang === 'de-CH')
+      || voices.find(v => v.lang.startsWith('de'))
+      || null
     utterance.lang = 'de-CH'
     utterance.rate = 1.0
     utterance.onend = () => {
-      clearInterval(iosWatchdogRef.current)
-      iosWatchdogRef.current = null
-      if (currentIndexRef.current < articles.length - 1) {
+      if (currentIndexRef.current < articlesLengthRef.current - 1) {
         autoPlayRef.current = true
         handleNextRef.current?.()
       } else {
-        releaseWakeLock()
         setIsPlaying(false)
+        isPlayingRef.current = false
       }
     }
-    utterance.onerror = (e) => {
-      clearInterval(iosWatchdogRef.current)
-      iosWatchdogRef.current = null
-      releaseWakeLock()
+    utterance.onerror = () => {
       setIsPlaying(false)
-      setTtsError(`Vorlesen fehlgeschlagen: ${e.error || 'Unbekannter Fehler'}`)
-      setTimeout(() => setTtsError(null), 4000)
+      isPlayingRef.current = false
     }
     utteranceRef.current = utterance
     synth.speak(utterance)
     setIsPlaying(true)
-    setTtsError(null)
-    // iOS watchdog: prevent speech from stopping on long texts
-    if (iosWatchdogRef.current) clearInterval(iosWatchdogRef.current)
-    iosWatchdogRef.current = setInterval(() => {
-      if (synth.speaking && !synth.paused) {
-        synth.pause()
-        synth.resume()
-      }
-    }, 10000)
-  }, [getReadableText, articles.length])
-
-  speakArticleRef.current = speakArticle
+    isPlayingRef.current = true
+  }, [])
 
   const toggleAudio = useCallback(() => {
-    if (!('speechSynthesis' in window)) {
-      setTtsError('Vorlesen wird auf diesem Gerät nicht unterstützt.')
-      setTimeout(() => setTtsError(null), 4000)
-      return
+    if (isPlayingRef.current) {
+      stopReading()
+    } else {
+      startReading(currentArticle)
     }
-    const synth = window.speechSynthesis
-    if (isPlaying) {
-      synth.cancel()
-      releaseWakeLock()
-      setIsPlaying(false)
-      return
-    }
-    const text = showSummary && currentArticle?.summary
-      ? currentArticle.summary.replace(/\n/g, ' ').trim()
-      : null
-    speakArticle(currentArticle, text)
-  }, [isPlaying, currentArticle, speakArticle, showSummary])
+  }, [currentArticle, startReading, stopReading])
 
-  // Scroll to top on article change, stop audio (oder auto-weiter vorlesen)
+  // Scroll to top on article change, stop audio wenn kein Autoplay ausstehend
   useEffect(() => {
-    window.speechSynthesis.cancel()
     window.scrollTo(0, 0)
     document.documentElement.scrollTop = 0
-    if (cardRef.current) {
-      cardRef.current.scrollTop = 0
-    }
+    if (cardRef.current) cardRef.current.scrollTop = 0
     setTimeout(() => {
       window.scrollTo(0, 0)
       document.documentElement.scrollTop = 0
     }, 10)
-    if (autoPlayRef.current) {
-      autoPlayRef.current = false
-      const article = articles[currentIndex]
-      if (article) setTimeout(() => speakArticleRef.current(article), 150)
-    } else {
-      releaseWakeLock()
+    if (!autoPlayRef.current) {
+      window.speechSynthesis?.cancel()
       setIsPlaying(false)
+      isPlayingRef.current = false
     }
   }, [currentIndex])
+
+  // Auto-play nach Navigation
+  useEffect(() => {
+    if (autoPlayRef.current && currentArticle) {
+      autoPlayRef.current = false
+      const timer = setTimeout(() => startReading(currentArticle), 300)
+      return () => clearTimeout(timer)
+    }
+  }, [currentArticle, startReading])
 
   // Passe currentIndex an wenn er ungültig wird (z.B. wenn Artikel ausgeblendet werden)
   useEffect(() => {
@@ -359,9 +323,6 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
 
   return (
     <div className="article-reader">
-      {ttsError && (
-        <div className="tts-error-banner">{ttsError}</div>
-      )}
       <div className="article-card-wrapper">
         <div
           ref={cardRef}

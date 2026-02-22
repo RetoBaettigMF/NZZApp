@@ -5,7 +5,7 @@ LOCAL_DIR="$HOME/Development/NZZApp/backend"
 REMOTE_USER="baettig"
 REMOTE_HOST="baettig.org"
 REMOTE_DIR="/var/www/nzzapp/backend/articles"
-LOG_FILE="$LOCAL_DIR/sraper_log.txt"
+LOG_FILE="$LOCAL_DIR/scraper_log.txt"
 
 # Log-Verzeichnis erstellen
 # mkdir -p "$HOME/.local/log"
