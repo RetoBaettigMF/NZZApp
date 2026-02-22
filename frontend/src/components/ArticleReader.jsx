@@ -10,6 +10,7 @@ function ArticleReader({ articles, onArticleRead, hideReadArticles, fontSizeLeve
   const [isAnimating, setIsAnimating] = useState(false)
   const [showSummary, setShowSummary] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
+  const [ttsError, setTtsError] = useState(null)
   const [entranceDir, setEntranceDir] = useState(null)
   const cardRef = useRef(null)
   const touchStartX = useRef(null)
@@ -49,7 +50,11 @@ function ArticleReader({ articles, onArticleRead, hideReadArticles, fontSizeLeve
   }, [])
 
   const startReading = useCallback((article) => {
-    if (!window.speechSynthesis) return
+    if (!window.speechSynthesis) {
+      setTtsError('Vorlesen wird auf diesem Browser nicht unterstützt.')
+      setTimeout(() => setTtsError(null), 5000)
+      return
+    }
     const synth = window.speechSynthesis
     synth.cancel()
     const text = getArticleText(article)
@@ -87,16 +92,29 @@ function ArticleReader({ articles, onArticleRead, hideReadArticles, fontSizeLeve
         isPlayingRef.current = false
       }
     }
-    utterance.onerror = () => {
+    utterance.onerror = (e) => {
       clearInterval(watchdogRef.current)
       watchdogRef.current = null
       setIsPlaying(false)
       isPlayingRef.current = false
+      setTtsError(`Fehler: ${e.error || 'unbekannt'}`)
+      setTimeout(() => setTtsError(null), 5000)
     }
     utteranceRef.current = utterance
-    synth.speak(utterance)
+
+    // State VOR speak() setzen – so reagiert der Button sofort sichtbar
     setIsPlaying(true)
     isPlayingRef.current = true
+    setTtsError(null)
+
+    try {
+      synth.speak(utterance)
+    } catch (e) {
+      setTtsError(`Fehler beim Starten: ${e.message}`)
+      setTimeout(() => setTtsError(null), 5000)
+      setIsPlaying(false)
+      isPlayingRef.current = false
+    }
   }, [])
 
   const toggleAudio = useCallback(() => {
@@ -326,6 +344,7 @@ function ArticleReader({ articles, onArticleRead, hideReadArticles, fontSizeLeve
 
   return (
     <div className="article-reader">
+      {ttsError && <div className="tts-error-banner">{ttsError}</div>}
       <div className="article-card-wrapper">
         <div
           ref={cardRef}

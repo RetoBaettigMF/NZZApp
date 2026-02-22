@@ -195,6 +195,15 @@
   animation: slideInFromLeft 0.25s ease forwards;
 }
 
+.tts-error-banner {
+  background: #fee;
+  color: #c33;
+  padding: 0.5rem 1rem;
+  text-align: center;
+  font-size: 0.85rem;
+  border-bottom: 1px solid #fcc;
+}
+
 @media (max-width: 600px) {
   .article-controls {
     gap: 0.5rem;
