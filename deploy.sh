@@ -101,14 +101,14 @@ echo ""
 
 # --- 6. Backend-Service neu starten ---
 log "Backend-Service neu starten..."
-RESTART_OUTPUT=$(ssh "$REMOTE_USER@$REMOTE_HOST" "sudo systemctl restart '$BACKEND_SERVICE' 2>&1" || true)
 if ssh "$REMOTE_USER@$REMOTE_HOST" "systemctl is-active --quiet '$BACKEND_SERVICE' 2>/dev/null"; then
     ok "Service '$BACKEND_SERVICE' läuft"
+    warn "HINWEIS: Backend-Code wurde deployed, aber der Service wurde NICHT neu gestartet."
+    warn "  Der neue Code ist erst aktiv nach einem manuellen Restart durch root:"
+    warn "  → Als root auf dem Server: systemctl restart $BACKEND_SERVICE"
 else
-    warn "Service-Restart fehlgeschlagen (sudo-Passwort?). Bitte einmalig ausführen:"
-    warn "  ssh $REMOTE_USER@$REMOTE_HOST"
-    warn "  sudo visudo   →  baettig ALL=(ALL) NOPASSWD: /bin/systemctl restart $BACKEND_SERVICE"
-    warn "Danach läuft der Restart automatisch."
+    warn "Service '$BACKEND_SERVICE' läuft nicht. Manueller Start durch root nötig:"
+    warn "  → Als root auf dem Server: systemctl start $BACKEND_SERVICE"
 fi
 echo ""
 
