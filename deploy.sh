@@ -62,7 +62,8 @@ echo ""
 
 # --- 3. Frontend auf Server deployen ---
 log "Frontend auf Server deployen (rsync)..."
-rsync -avz --delete \
+rsync -rltvz --delete \
+    --no-group --omit-dir-times \
     --exclude='.htaccess' \
     "$FRONTEND_DIR/dist/" \
     "$REMOTE_USER@$REMOTE_HOST:$REMOTE_WEB_ROOT/"
@@ -71,7 +72,8 @@ echo ""
 
 # --- 4. Backend-Dateien auf Server deployen ---
 log "Backend-Dateien auf Server deployen (rsync)..."
-rsync -avz \
+rsync -rltvz \
+    --no-group --omit-dir-times \
     --exclude='venv/' \
     --exclude='__pycache__/' \
     --exclude='*.pyc' \
@@ -89,11 +91,9 @@ log "Python-Abhängigkeiten auf Server aktualisieren..."
 ssh "$REMOTE_USER@$REMOTE_HOST" "
     cd '$REMOTE_BACKEND_DIR'
     if [ -d venv ]; then
-        venv/bin/pip install -r requirements.txt -q
-    elif command -v pip3 &>/dev/null; then
-        pip3 install -r requirements.txt -q
+        venv/bin/pip install -r requirements.txt -q && echo 'pip install OK'
     else
-        echo 'Kein pip gefunden – Dependencies übersprungen'
+        echo 'Kein venv gefunden – Dependencies übersprungen'
     fi
 "
 ok "Python-Abhängigkeiten aktualisiert"
@@ -101,13 +101,14 @@ echo ""
 
 # --- 6. Backend-Service neu starten ---
 log "Backend-Service neu starten..."
+RESTART_OUTPUT=$(ssh "$REMOTE_USER@$REMOTE_HOST" "sudo systemctl restart '$BACKEND_SERVICE' 2>&1" || true)
 if ssh "$REMOTE_USER@$REMOTE_HOST" "systemctl is-active --quiet '$BACKEND_SERVICE' 2>/dev/null"; then
-    ssh "$REMOTE_USER@$REMOTE_HOST" "sudo systemctl restart '$BACKEND_SERVICE'"
-    ok "Service '$BACKEND_SERVICE' neu gestartet"
+    ok "Service '$BACKEND_SERVICE' läuft"
 else
-    warn "Kein aktiver systemd-Service '$BACKEND_SERVICE' gefunden."
-    warn "Backend ggf. manuell starten: ssh $REMOTE_USER@$REMOTE_HOST"
-    warn "  → cd $REMOTE_BACKEND_DIR && ./start.sh (oder: uvicorn api_server:app)"
+    warn "Service-Restart fehlgeschlagen (sudo-Passwort?). Bitte einmalig ausführen:"
+    warn "  ssh $REMOTE_USER@$REMOTE_HOST"
+    warn "  sudo visudo   →  baettig ALL=(ALL) NOPASSWD: /bin/systemctl restart $BACKEND_SERVICE"
+    warn "Danach läuft der Restart automatisch."
 fi
 echo ""
 
