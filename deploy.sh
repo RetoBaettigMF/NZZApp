@@ -18,6 +18,7 @@ BACKEND_DIR="$REPO_DIR/backend"
 REMOTE_USER="baettig"
 REMOTE_HOST="baettig.org"
 REMOTE_WEB_ROOT="/var/www/nzzapp"
+REMOTE_FRONTEND_DIR="$REMOTE_WEB_ROOT/frontend/dist"
 REMOTE_BACKEND_DIR="$REMOTE_WEB_ROOT/backend"
 
 # Name des systemd-Services für das Backend (leer lassen, falls keiner existiert)
@@ -65,10 +66,9 @@ log "Frontend auf Server deployen (rsync)..."
 rsync -rltvz --delete \
     --no-group --omit-dir-times \
     --exclude='.htaccess' \
-    --exclude='backend/' \
     "$FRONTEND_DIR/dist/" \
-    "$REMOTE_USER@$REMOTE_HOST:$REMOTE_WEB_ROOT/"
-ok "Frontend deployed nach $REMOTE_HOST:$REMOTE_WEB_ROOT/"
+    "$REMOTE_USER@$REMOTE_HOST:$REMOTE_FRONTEND_DIR/"
+ok "Frontend deployed nach $REMOTE_HOST:$REMOTE_FRONTEND_DIR/"
 echo ""
 
 # --- 4. Backend-Dateien auf Server deployen ---
@@ -104,8 +104,13 @@ echo ""
 log "Backend neu laden..."
 GUNICORN_PID=$(ssh "$REMOTE_USER@$REMOTE_HOST" "pgrep -f 'gunicorn.*flask_server' | head -1" 2>/dev/null || true)
 if [ -n "$GUNICORN_PID" ]; then
-    ssh "$REMOTE_USER@$REMOTE_HOST" "kill -HUP '$GUNICORN_PID'"
-    ok "Gunicorn (PID $GUNICORN_PID) per SIGHUP neu geladen"
+    ssh "$REMOTE_USER@$REMOTE_HOST" "kill -HUP '$GUNICORN_PID'" 2>/dev/null || true
+    sleep 1
+    if ssh "$REMOTE_USER@$REMOTE_HOST" "systemctl is-active --quiet '$BACKEND_SERVICE'" 2>/dev/null; then
+        ok "Gunicorn (PID $GUNICORN_PID) per SIGHUP neu geladen"
+    else
+        warn "SIGHUP fehlgeschlagen. Bitte manuell neustarten: systemctl restart $BACKEND_SERVICE"
+    fi
 else
     warn "Gunicorn läuft nicht. Einmaliger Start durch root nötig:"
     warn "  → systemctl start $BACKEND_SERVICE"
