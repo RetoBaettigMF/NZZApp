@@ -22,7 +22,6 @@ function ArticleReader({ articles, onArticleRead, hideReadArticles, fontSizeLeve
   const currentIndexRef = useRef(0)
   const handleNextRef = useRef(null)
   const articlesLengthRef = useRef(0)
-  const watchdogRef = useRef(null)
 
   const currentArticle = articles[currentIndex]
   currentIndexRef.current = currentIndex
@@ -41,8 +40,6 @@ function ArticleReader({ articles, onArticleRead, hideReadArticles, fontSizeLeve
   }
 
   const stopReading = useCallback(() => {
-    clearInterval(watchdogRef.current)
-    watchdogRef.current = null
     window.speechSynthesis?.cancel()
     autoPlayRef.current = false
     setIsPlaying(false)
@@ -80,19 +77,8 @@ function ArticleReader({ articles, onArticleRead, hideReadArticles, fontSizeLeve
       || voices.find(v => v.lang === 'de-DE')
       || voices.find(v => v.lang.startsWith('de'))
 
-    // Watchdog: Android/iOS Chrome stoppt Speech nach ~15s ohne diesen Trick
-    clearInterval(watchdogRef.current)
-    watchdogRef.current = setInterval(() => {
-      if (synth.speaking && !synth.paused) {
-        synth.pause()
-        synth.resume()
-      }
-    }, 10000)
-
     const speakChunk = (index) => {
       if (index >= chunks.length) {
-        clearInterval(watchdogRef.current)
-        watchdogRef.current = null
         if (currentIndexRef.current < articlesLengthRef.current - 1) {
           autoPlayRef.current = true
           handleNextRef.current?.()
@@ -110,8 +96,8 @@ function ArticleReader({ articles, onArticleRead, hideReadArticles, fontSizeLeve
       utterance.rate = 1.0
       utterance.onend = () => speakChunk(index + 1)
       utterance.onerror = (e) => {
-        clearInterval(watchdogRef.current)
-        watchdogRef.current = null
+        // interrupted = synth.cancel() wurde aufgerufen (z.B. Stop-Button) → kein Fehler zeigen
+        if (e.error === 'interrupted' || e.error === 'canceled') return
         setIsPlaying(false)
         isPlayingRef.current = false
         setTtsError(`Fehler: ${e.error || 'unbekannt'}`)
@@ -158,8 +144,6 @@ function ArticleReader({ articles, onArticleRead, hideReadArticles, fontSizeLeve
       document.documentElement.scrollTop = 0
     }, 10)
     if (!autoPlayRef.current) {
-      clearInterval(watchdogRef.current)
-      watchdogRef.current = null
       window.speechSynthesis?.cancel()
       setIsPlaying(false)
       isPlayingRef.current = false
