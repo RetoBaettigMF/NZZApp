@@ -21,6 +21,7 @@ function ArticleReader({ articles, onArticleRead, hideReadArticles, fontSizeLeve
   const currentIndexRef = useRef(0)
   const handleNextRef = useRef(null)
   const articlesLengthRef = useRef(0)
+  const watchdogRef = useRef(null)
 
   const currentArticle = articles[currentIndex]
   currentIndexRef.current = currentIndex
@@ -39,6 +40,8 @@ function ArticleReader({ articles, onArticleRead, hideReadArticles, fontSizeLeve
   }
 
   const stopReading = useCallback(() => {
+    clearInterval(watchdogRef.current)
+    watchdogRef.current = null
     window.speechSynthesis?.cancel()
     autoPlayRef.current = false
     setIsPlaying(false)
@@ -51,13 +54,31 @@ function ArticleReader({ articles, onArticleRead, hideReadArticles, fontSizeLeve
     synth.cancel()
     const text = getArticleText(article)
     const utterance = new SpeechSynthesisUtterance(text)
+
+    // Voice selection: nur setzen wenn eine deutsche Stimme gefunden wird.
+    // Kein hartes lang='de-CH' ohne passende Stimme – Android schweigt sonst.
     const voices = synth.getVoices()
-    utterance.voice = voices.find(v => v.lang === 'de-CH')
+    const voice = voices.find(v => v.lang === 'de-CH')
+      || voices.find(v => v.lang === 'de-DE')
       || voices.find(v => v.lang.startsWith('de'))
-      || null
-    utterance.lang = 'de-CH'
+    if (voice) {
+      utterance.voice = voice
+      utterance.lang = voice.lang
+    }
     utterance.rate = 1.0
+
+    // Watchdog: Android/iOS Chrome stoppt Speech nach ~15s ohne diesen Trick
+    clearInterval(watchdogRef.current)
+    watchdogRef.current = setInterval(() => {
+      if (synth.speaking && !synth.paused) {
+        synth.pause()
+        synth.resume()
+      }
+    }, 10000)
+
     utterance.onend = () => {
+      clearInterval(watchdogRef.current)
+      watchdogRef.current = null
       if (currentIndexRef.current < articlesLengthRef.current - 1) {
         autoPlayRef.current = true
         handleNextRef.current?.()
@@ -67,6 +88,8 @@ function ArticleReader({ articles, onArticleRead, hideReadArticles, fontSizeLeve
       }
     }
     utterance.onerror = () => {
+      clearInterval(watchdogRef.current)
+      watchdogRef.current = null
       setIsPlaying(false)
       isPlayingRef.current = false
     }
@@ -94,6 +117,8 @@ function ArticleReader({ articles, onArticleRead, hideReadArticles, fontSizeLeve
       document.documentElement.scrollTop = 0
     }, 10)
     if (!autoPlayRef.current) {
+      clearInterval(watchdogRef.current)
+      watchdogRef.current = null
       window.speechSynthesis?.cancel()
       setIsPlaying(false)
       isPlayingRef.current = false
