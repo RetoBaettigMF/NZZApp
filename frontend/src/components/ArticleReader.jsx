@@ -49,6 +49,22 @@ function ArticleReader({ articles, onArticleRead, hideReadArticles, fontSizeLeve
     isPlayingRef.current = false
   }, [])
 
+  const splitText = (text, maxLen = 3000) => {
+    if (text.length <= maxLen) return [text]
+    const chunks = []
+    let remaining = text
+    while (remaining.length > maxLen) {
+      let cutAt = remaining.lastIndexOf('. ', maxLen)
+      if (cutAt < maxLen * 0.5) cutAt = remaining.lastIndexOf(' ', maxLen)
+      if (cutAt < 0) cutAt = maxLen
+      else cutAt += 1
+      chunks.push(remaining.slice(0, cutAt).trim())
+      remaining = remaining.slice(cutAt).trim()
+    }
+    if (remaining) chunks.push(remaining)
+    return chunks
+  }
+
   const startReading = useCallback((article) => {
     if (!window.speechSynthesis) {
       setTtsError('Vorlesen wird auf diesem Browser nicht unterstützt.')
@@ -56,21 +72,13 @@ function ArticleReader({ articles, onArticleRead, hideReadArticles, fontSizeLeve
       return
     }
     const synth = window.speechSynthesis
-    synth.cancel()
     const text = getArticleText(article)
-    const utterance = new SpeechSynthesisUtterance(text)
+    const chunks = splitText(text)
 
-    // Voice selection: nur setzen wenn eine deutsche Stimme gefunden wird.
-    // Kein hartes lang='de-CH' ohne passende Stimme – Android schweigt sonst.
     const voices = synth.getVoices()
     const voice = voices.find(v => v.lang === 'de-CH')
       || voices.find(v => v.lang === 'de-DE')
       || voices.find(v => v.lang.startsWith('de'))
-    if (voice) {
-      utterance.voice = voice
-      utterance.lang = voice.lang
-    }
-    utterance.rate = 1.0
 
     // Watchdog: Android/iOS Chrome stoppt Speech nach ~15s ohne diesen Trick
     clearInterval(watchdogRef.current)
@@ -81,40 +89,55 @@ function ArticleReader({ articles, onArticleRead, hideReadArticles, fontSizeLeve
       }
     }, 10000)
 
-    utterance.onend = () => {
-      clearInterval(watchdogRef.current)
-      watchdogRef.current = null
-      if (currentIndexRef.current < articlesLengthRef.current - 1) {
-        autoPlayRef.current = true
-        handleNextRef.current?.()
-      } else {
+    const speakChunk = (index) => {
+      if (index >= chunks.length) {
+        clearInterval(watchdogRef.current)
+        watchdogRef.current = null
+        if (currentIndexRef.current < articlesLengthRef.current - 1) {
+          autoPlayRef.current = true
+          handleNextRef.current?.()
+        } else {
+          setIsPlaying(false)
+          isPlayingRef.current = false
+        }
+        return
+      }
+      const utterance = new SpeechSynthesisUtterance(chunks[index])
+      if (voice) {
+        utterance.voice = voice
+        utterance.lang = voice.lang
+      }
+      utterance.rate = 1.0
+      utterance.onend = () => speakChunk(index + 1)
+      utterance.onerror = (e) => {
+        clearInterval(watchdogRef.current)
+        watchdogRef.current = null
         setIsPlaying(false)
         isPlayingRef.current = false
+        setTtsError(`Fehler: ${e.error || 'unbekannt'}`)
+        setTimeout(() => setTtsError(null), 5000)
       }
+      utteranceRef.current = utterance
+      synth.speak(utterance)
     }
-    utterance.onerror = (e) => {
-      clearInterval(watchdogRef.current)
-      watchdogRef.current = null
-      setIsPlaying(false)
-      isPlayingRef.current = false
-      setTtsError(`Fehler: ${e.error || 'unbekannt'}`)
-      setTimeout(() => setTtsError(null), 5000)
-    }
-    utteranceRef.current = utterance
 
-    // State VOR speak() setzen – so reagiert der Button sofort sichtbar
     setIsPlaying(true)
     isPlayingRef.current = true
     setTtsError(null)
 
-    try {
-      synth.speak(utterance)
-    } catch (e) {
-      setTtsError(`Fehler beim Starten: ${e.message}`)
-      setTimeout(() => setTtsError(null), 5000)
-      setIsPlaying(false)
-      isPlayingRef.current = false
-    }
+    // cancel() + sofortiges speak() verursacht synthesis-failed auf Android.
+    // 50ms Delay reicht und liegt noch im User-Gesture-Aktivierungsfenster.
+    synth.cancel()
+    setTimeout(() => {
+      try {
+        speakChunk(0)
+      } catch (e) {
+        setTtsError(`Fehler beim Starten: ${e.message}`)
+        setTimeout(() => setTtsError(null), 5000)
+        setIsPlaying(false)
+        isPlayingRef.current = false
+      }
+    }, 50)
   }, [])
 
   const toggleAudio = useCallback(() => {
