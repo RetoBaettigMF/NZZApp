@@ -65,6 +65,7 @@ log "Frontend auf Server deployen (rsync)..."
 rsync -rltvz --delete \
     --no-group --omit-dir-times \
     --exclude='.htaccess' \
+    --exclude='backend/' \
     "$FRONTEND_DIR/dist/" \
     "$REMOTE_USER@$REMOTE_HOST:$REMOTE_WEB_ROOT/"
 ok "Frontend deployed nach $REMOTE_HOST:$REMOTE_WEB_ROOT/"
@@ -79,7 +80,7 @@ rsync -rltvz \
     --exclude='*.pyc' \
     --exclude='articles/' \
     --exclude='*.png' \
-    --exclude='*.txt' \
+    --exclude='*_log.txt' \
     --exclude='*.log' \
     "$BACKEND_DIR/" \
     "$REMOTE_USER@$REMOTE_HOST:$REMOTE_BACKEND_DIR/"
@@ -99,16 +100,15 @@ ssh "$REMOTE_USER@$REMOTE_HOST" "
 ok "Python-Abhängigkeiten aktualisiert"
 echo ""
 
-# --- 6. Backend-Service neu starten ---
-log "Backend-Service neu starten..."
-if ssh "$REMOTE_USER@$REMOTE_HOST" "systemctl is-active --quiet '$BACKEND_SERVICE' 2>/dev/null"; then
-    ok "Service '$BACKEND_SERVICE' läuft"
-    warn "HINWEIS: Backend-Code wurde deployed, aber der Service wurde NICHT neu gestartet."
-    warn "  Der neue Code ist erst aktiv nach einem manuellen Restart durch root:"
-    warn "  → Als root auf dem Server: systemctl restart $BACKEND_SERVICE"
+# --- 6. Backend-Service neu laden (Gunicorn SIGHUP) ---
+log "Backend neu laden..."
+GUNICORN_PID=$(ssh "$REMOTE_USER@$REMOTE_HOST" "pgrep -f 'gunicorn.*flask_server' | head -1" 2>/dev/null || true)
+if [ -n "$GUNICORN_PID" ]; then
+    ssh "$REMOTE_USER@$REMOTE_HOST" "kill -HUP '$GUNICORN_PID'"
+    ok "Gunicorn (PID $GUNICORN_PID) per SIGHUP neu geladen"
 else
-    warn "Service '$BACKEND_SERVICE' läuft nicht. Manueller Start durch root nötig:"
-    warn "  → Als root auf dem Server: systemctl start $BACKEND_SERVICE"
+    warn "Gunicorn läuft nicht. Einmaliger Start durch root nötig:"
+    warn "  → systemctl start $BACKEND_SERVICE"
 fi
 echo ""
 
