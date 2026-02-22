@@ -161,16 +161,17 @@ function ArticleReader({ articles, onArticleRead, hideReadArticles, fontSizeLeve
   const handleNext = useCallback(() => {
     if (isAnimating) return
     if (currentIndex < articles.length - 1) {
+      const articleIsSaved = savedArticles.includes(articles[currentIndex]?.id || articles[currentIndex]?.url)
       animateAway('left', () => {
         markRead()
-        if (!hideReadArticles) {
+        if (!hideReadArticles || articleIsSaved) {
           setCurrentIndex(prev => prev + 1)
         }
       })
     } else {
       alert('Du bist bereits beim ältesten Artikel')
     }
-  }, [currentIndex, articles.length, isAnimating, animateAway, markRead, hideReadArticles])
+  }, [currentIndex, articles, isAnimating, animateAway, markRead, hideReadArticles, savedArticles])
 
   handleNextRef.current = handleNext
 
@@ -220,9 +221,10 @@ function ArticleReader({ articles, onArticleRead, hideReadArticles, fontSizeLeve
     touchStartX.current = null
 
     if (delta < -minSwipeDistance && currentIndex < articles.length - 1) {
+      const articleIsSaved = savedArticles.includes(articles[currentIndex]?.id || articles[currentIndex]?.url)
       animateAway('left', () => {
         markRead()
-        if (!hideReadArticles) {
+        if (!hideReadArticles || articleIsSaved) {
           setCurrentIndex(prev => prev + 1)
         }
       })
@@ -234,7 +236,7 @@ function ArticleReader({ articles, onArticleRead, hideReadArticles, fontSizeLeve
     } else {
       updateSwipeX(0) // Snap back zur Mitte
     }
-  }, [currentIndex, articles.length, animateAway, markRead, hideReadArticles])
+  }, [currentIndex, articles, animateAway, markRead, hideReadArticles, savedArticles])
 
   // Tastatur-Navigation
   useEffect(() => {
