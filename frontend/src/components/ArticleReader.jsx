@@ -14,6 +14,8 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
   const [isAnimating, setIsAnimating] = useState(false)
   const [showSummary, setShowSummary] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
+  const [ttsError, setTtsError] = useState(null)
+  const [entranceDir, setEntranceDir] = useState(null)
   const cardRef = useRef(null)
   const touchStartX = useRef(null)
   const swipeXRef = useRef(0)
@@ -24,6 +26,7 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
   const handleNextRef = useRef(null)
   const speakArticleRef = useRef(null)
   const wakeLockRef = useRef(null)
+  const iosWatchdogRef = useRef(null)
 
   const currentArticle = articles[currentIndex]
   currentIndexRef.current = currentIndex
@@ -37,6 +40,8 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
   const releaseWakeLock = () => {
     wakeLockRef.current?.release()
     wakeLockRef.current = null
+    clearInterval(iosWatchdogRef.current)
+    iosWatchdogRef.current = null
   }
 
   const getReadableText = useCallback((article) => {
@@ -52,13 +57,25 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
   }, [])
 
   const speakArticle = useCallback((article, textOverride = null) => {
+    if (!('speechSynthesis' in window)) {
+      setTtsError('Vorlesen wird auf diesem Gerät nicht unterstützt.')
+      setTimeout(() => setTtsError(null), 4000)
+      return
+    }
     acquireWakeLock()
     const synth = window.speechSynthesis
+    synth.cancel()
     const text = textOverride ?? getReadableText(article)
     const utterance = new SpeechSynthesisUtterance(text)
+    // Voice selection: de-CH → de-DE fallback
+    const voices = synth.getVoices()
+    const voice = voices.find(v => v.lang === 'de-CH') || voices.find(v => v.lang === 'de-DE')
+    if (voice) utterance.voice = voice
     utterance.lang = 'de-CH'
     utterance.rate = 1.0
     utterance.onend = () => {
+      clearInterval(iosWatchdogRef.current)
+      iosWatchdogRef.current = null
       if (currentIndexRef.current < articles.length - 1) {
         autoPlayRef.current = true
         handleNextRef.current?.()
@@ -67,15 +84,36 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
         setIsPlaying(false)
       }
     }
-    utterance.onerror = () => { releaseWakeLock(); setIsPlaying(false) }
+    utterance.onerror = (e) => {
+      clearInterval(iosWatchdogRef.current)
+      iosWatchdogRef.current = null
+      releaseWakeLock()
+      setIsPlaying(false)
+      setTtsError(`Vorlesen fehlgeschlagen: ${e.error || 'Unbekannter Fehler'}`)
+      setTimeout(() => setTtsError(null), 4000)
+    }
     utteranceRef.current = utterance
     synth.speak(utterance)
     setIsPlaying(true)
+    setTtsError(null)
+    // iOS watchdog: prevent speech from stopping on long texts
+    if (iosWatchdogRef.current) clearInterval(iosWatchdogRef.current)
+    iosWatchdogRef.current = setInterval(() => {
+      if (synth.speaking && !synth.paused) {
+        synth.pause()
+        synth.resume()
+      }
+    }, 10000)
   }, [getReadableText, articles.length])
 
   speakArticleRef.current = speakArticle
 
   const toggleAudio = useCallback(() => {
+    if (!('speechSynthesis' in window)) {
+      setTtsError('Vorlesen wird auf diesem Gerät nicht unterstützt.')
+      setTimeout(() => setTtsError(null), 4000)
+      return
+    }
     const synth = window.speechSynthesis
     if (isPlaying) {
       synth.cancel()
@@ -93,9 +131,14 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
   useEffect(() => {
     window.speechSynthesis.cancel()
     window.scrollTo(0, 0)
+    document.documentElement.scrollTop = 0
     if (cardRef.current) {
       cardRef.current.scrollTop = 0
     }
+    setTimeout(() => {
+      window.scrollTo(0, 0)
+      document.documentElement.scrollTop = 0
+    }, 10)
     if (autoPlayRef.current) {
       autoPlayRef.current = false
       const article = articles[currentIndex]
@@ -149,9 +192,14 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
     setIsAnimating(true)
     updateSwipeX(targetX)
     setTimeout(() => {
+      const entranceDirection = direction === 'left' ? 'right' : 'left'
       onComplete()
+      setEntranceDir(entranceDirection)
       updateSwipeX(0)
-      setTimeout(() => setIsAnimating(false), 30)
+      setTimeout(() => {
+        setIsAnimating(false)
+        setEntranceDir(null)
+      }, 280)
     }, 250)
   }, [])
 
@@ -212,7 +260,7 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
   const onTouchMove = useCallback((e) => {
     if (touchStartX.current === null) return
     const delta = e.targetTouches[0].clientX - touchStartX.current
-    if (Math.abs(delta) > window.innerWidth * 0.08) {
+    if (Math.abs(delta) > window.innerWidth * 0.12) {
       updateSwipeX(delta)
     }
   }, [])
@@ -291,7 +339,7 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
 
   const isSaved = currentArticle && savedArticles.includes(currentArticle.id || currentArticle.url)
 
-  const cardStyle = {
+  const cardStyle = entranceDir ? {} : {
     transform: `translateX(${swipeX}px)`,
     transition: isSwiping ? 'none' : 'transform 0.25s ease, opacity 0.25s ease',
     opacity: Math.max(0, 1 - Math.abs(swipeX) / (window.innerWidth * 0.6)),
@@ -311,10 +359,13 @@ function ArticleReader({ articles, onArticlesUpdate, onArticleRead, hideReadArti
 
   return (
     <div className="article-reader">
+      {ttsError && (
+        <div className="tts-error-banner">{ttsError}</div>
+      )}
       <div className="article-card-wrapper">
         <div
           ref={cardRef}
-          className="article-card"
+          className={`article-card${entranceDir ? ` enter-from-${entranceDir}` : ''}`}
           style={cardStyle}
           onTouchStart={onTouchStart}
           onTouchMove={onTouchMove}

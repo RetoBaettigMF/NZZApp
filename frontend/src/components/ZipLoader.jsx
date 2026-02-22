@@ -6,7 +6,7 @@ import './ZipLoader.css'
 const API_BASE = '/api'
 
 function ZipLoader({ onArticlesLoaded, onLoading, onError, onAvailableDatesLoaded, onLoadDateReady }) {
-  const { token } = useAuth()
+  const { token, logout } = useAuth()
   const [lastUpdate, setLastUpdate] = useState(() => {
     return localStorage.getItem('nzz_last_update') || null
   })
@@ -31,7 +31,10 @@ function ZipLoader({ onArticlesLoaded, onLoading, onError, onAvailableDatesLoade
           'Authorization': `Bearer ${token}`
         }
       })
-      if (!response.ok) return
+      if (!response.ok) {
+        if (response.status === 401) { logout(); return }
+        return
+      }
 
       const data = await response.json()
       const dates = data.archives.map(archive => archive.date)
@@ -55,6 +58,7 @@ function ZipLoader({ onArticlesLoaded, onLoading, onError, onAvailableDatesLoade
         }
       })
       if (!zipResponse.ok) {
+        if (zipResponse.status === 401) { logout(); return }
         throw new Error('ZIP konnte nicht geladen werden')
       }
 
@@ -124,6 +128,7 @@ function ZipLoader({ onArticlesLoaded, onLoading, onError, onAvailableDatesLoade
         }
       })
       if (!response.ok) {
+        if (response.status === 401) { logout(); return }
         throw new Error('Keine Archive gefunden')
       }
 

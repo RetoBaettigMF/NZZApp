@@ -2,13 +2,13 @@
 # NZZ Scraper - Lokal ausführen und auf Server kopieren
 
 LOCAL_DIR="$HOME/Development/NZZApp/backend"
-REMOTE_USER="root"
+REMOTE_USER="baettig"
 REMOTE_HOST="baettig.org"
 REMOTE_DIR="/var/www/nzzapp/backend/articles"
-LOG_FILE="$HOME/.local/log/nzz-scraper-sync.log"
+LOG_FILE="$LOCAL_DIR/sraper_log.txt"
 
 # Log-Verzeichnis erstellen
-mkdir -p "$HOME/.local/log"
+# mkdir -p "$HOME/.local/log"
 
 echo "==========================================" >> "$LOG_FILE"
 echo "NZZ Scraper Sync - $(date)" >> "$LOG_FILE"

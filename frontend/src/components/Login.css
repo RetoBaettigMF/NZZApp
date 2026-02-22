@@ -3,21 +3,21 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #f0f0f0;
   padding: 1rem;
 }
 
 .login-card {
   background: white;
   border-radius: 16px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
   width: 100%;
   max-width: 400px;
   overflow: hidden;
 }
 
 .login-header {
-  background: linear-gradient(135deg, #667eea, #764ba2);
+  background: #1a1a1a;
   color: white;
   padding: 2rem;
   text-align: center;

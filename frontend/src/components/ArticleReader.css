@@ -177,6 +177,33 @@
   margin-top: 1rem;
 }
 
+@keyframes slideInFromRight {
+  from { transform: translateX(100vw); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slideInFromLeft {
+  from { transform: translateX(-100vw); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.article-card.enter-from-right {
+  animation: slideInFromRight 0.25s ease forwards;
+}
+
+.article-card.enter-from-left {
+  animation: slideInFromLeft 0.25s ease forwards;
+}
+
+.tts-error-banner {
+  background: #fee;
+  color: #c33;
+  padding: 0.5rem 1rem;
+  text-align: center;
+  font-size: 0.85rem;
+  border-bottom: 1px solid #fcc;
+}
+
 @media (max-width: 600px) {
   .article-controls {
     gap: 0.5rem;

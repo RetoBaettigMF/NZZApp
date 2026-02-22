@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import './App.css'
 import { useAuth } from './contexts/AuthContext'
 import { BUILD } from './version'
+import { useRegisterSW } from 'virtual:pwa-register/react'
 import Login from './components/Login'
 import ArticleReader from './components/ArticleReader'
 import DateNavigator from './components/DateNavigator'
@@ -12,6 +13,14 @@ import HelpModal from './components/HelpModal'
 
 function App() {
   const { isAuthenticated, loading: authLoading } = useAuth()
+  const { needRefresh: [needRefresh], updateServiceWorker } = useRegisterSW()
+  const [updateBanner, setUpdateBanner] = useState(false)
+  const [appUpdated] = useState(() => {
+    const flag = sessionStorage.getItem('nzz_app_updated')
+    if (flag) { sessionStorage.removeItem('nzz_app_updated'); return true }
+    return false
+  })
+  const [showUpdateToast, setShowUpdateToast] = useState(appUpdated)
   const [articles, setArticles] = useState([])
   const [currentDate, setCurrentDate] = useState('all')
   const [isLoading, setIsLoading] = useState(false)
@@ -76,6 +85,21 @@ function App() {
   useEffect(() => {
     localStorage.setItem('nzz_read_articles', JSON.stringify(readArticles))
   }, [readArticles])
+
+  // PWA Update-Handling
+  useEffect(() => {
+    if (needRefresh) {
+      setUpdateBanner(true)
+      sessionStorage.setItem('nzz_app_updated', '1')
+      setTimeout(() => updateServiceWorker(true), 1500)
+    }
+  }, [needRefresh])
+
+  useEffect(() => {
+    if (showUpdateToast) {
+      setTimeout(() => setShowUpdateToast(false), 3000)
+    }
+  }, [showUpdateToast])
 
   const handleArticlesLoaded = (newArticles) => {
     setArticles(newArticles)
@@ -251,6 +275,14 @@ function App() {
           />
         </div>
       </header>
+
+      {updateBanner && (
+        <div className="update-banner">App wird aktualisiert...</div>
+      )}
+
+      {showUpdateToast && (
+        <div className="update-success-toast">App erfolgreich aktualisiert</div>
+      )}
 
       {showAdminPanel && (
         <AdminPanel onClose={() => setShowAdminPanel(false)} />
