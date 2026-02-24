@@ -18,10 +18,13 @@ function ArticleReader({ articles, onArticleRead, hideReadArticles, fontSizeLeve
   const lastTapRef = useRef(0)
   const utteranceRef = useRef(null)
   const autoPlayRef = useRef(false)
+  const autoPlaySummaryRef = useRef(false)
   const isPlayingRef = useRef(false)
   const currentIndexRef = useRef(0)
   const handleNextRef = useRef(null)
   const articlesLengthRef = useRef(0)
+  const audioCtxRef = useRef(null)
+  const wakeLockRef = useRef(null)
 
   const currentArticle = articles[currentIndex]
   currentIndexRef.current = currentIndex
@@ -43,12 +46,31 @@ function ArticleReader({ articles, onArticleRead, hideReadArticles, fontSizeLeve
     return `${article.title}. ${body}`
   }
 
+  const getSummaryText = (article) => {
+    const text = (article.summary || '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s{2,}/g, ' ')
+      .trim()
+    return `${article.title}. Zusammenfassung: ${text}`
+  }
+
+  const releaseAudioSession = useCallback(() => {
+    audioCtxRef.current?.close().catch(() => {})
+    audioCtxRef.current = null
+    wakeLockRef.current?.release().catch(() => {})
+    wakeLockRef.current = null
+    if (navigator.mediaSession) {
+      navigator.mediaSession.playbackState = 'none'
+    }
+  }, [])
+
   const stopReading = useCallback(() => {
     window.speechSynthesis?.cancel()
     autoPlayRef.current = false
     setIsPlaying(false)
     isPlayingRef.current = false
-  }, [])
+    releaseAudioSession()
+  }, [releaseAudioSession])
 
   const splitText = (text, maxLen = 3000) => {
     if (text.length <= maxLen) return [text]
@@ -66,14 +88,16 @@ function ArticleReader({ articles, onArticleRead, hideReadArticles, fontSizeLeve
     return chunks
   }
 
-  const startReading = useCallback((article) => {
+  const startReading = useCallback((article, useSummary = false) => {
     if (!window.speechSynthesis) {
       setTtsError('Vorlesen wird auf diesem Browser nicht unterstützt.')
       setTimeout(() => setTtsError(null), 5000)
       return
     }
     const synth = window.speechSynthesis
-    const text = getArticleText(article)
+    const text = useSummary && article.summary
+      ? getSummaryText(article)
+      : getArticleText(article)
     const chunks = splitText(text)
 
     const voices = synth.getVoices()
@@ -85,10 +109,12 @@ function ArticleReader({ articles, onArticleRead, hideReadArticles, fontSizeLeve
       if (index >= chunks.length) {
         if (currentIndexRef.current < articlesLengthRef.current - 1) {
           autoPlayRef.current = true
+          autoPlaySummaryRef.current = useSummary
           handleNextRef.current?.()
         } else {
           setIsPlaying(false)
           isPlayingRef.current = false
+          releaseAudioSession()
         }
         return
       }
@@ -104,6 +130,7 @@ function ArticleReader({ articles, onArticleRead, hideReadArticles, fontSizeLeve
         if (e.error === 'interrupted' || e.error === 'canceled') return
         setIsPlaying(false)
         isPlayingRef.current = false
+        releaseAudioSession()
         setTtsError(`Fehler: ${e.error || 'unbekannt'}`)
         setTimeout(() => setTtsError(null), 5000)
       }
@@ -114,6 +141,54 @@ function ArticleReader({ articles, onArticleRead, hideReadArticles, fontSizeLeve
     setIsPlaying(true)
     isPlayingRef.current = true
     setTtsError(null)
+
+    // Stummen AudioContext starten – hält die Audio-Session aktiv und verhindert
+    // das Pausieren von speechSynthesis bei Screen-Off (Android/iOS Workaround).
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext
+      if (AudioCtx && (!audioCtxRef.current || audioCtxRef.current.state === 'closed')) {
+        const ctx = new AudioCtx()
+        const oscillator = ctx.createOscillator()
+        const gain = ctx.createGain()
+        gain.gain.value = 0.001 // praktisch unhörbar
+        oscillator.frequency.value = 1
+        oscillator.connect(gain)
+        gain.connect(ctx.destination)
+        oscillator.start()
+        audioCtxRef.current = ctx
+      }
+    } catch (_) { /* kein AudioContext-Support */ }
+
+    // Screen Wake Lock anfordern (verhindert Screen-Off während Vorlesen)
+    if ('wakeLock' in navigator && !wakeLockRef.current) {
+      navigator.wakeLock.request('screen').then(lock => {
+        wakeLockRef.current = lock
+      }).catch(() => {})
+    }
+
+    // MediaSession für Sperrbildschirm-Steuerung
+    if (navigator.mediaSession) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: article.title,
+        artist: useSummary ? 'NZZ – Zusammenfassung' : 'NZZ',
+      })
+      navigator.mediaSession.playbackState = 'playing'
+      // Direkt cancel+cleanup aufrufen um zirkuläre useCallback-Abhängigkeit zu vermeiden
+      navigator.mediaSession.setActionHandler('pause', () => {
+        window.speechSynthesis?.cancel()
+        autoPlayRef.current = false
+        setIsPlaying(false)
+        isPlayingRef.current = false
+        releaseAudioSession()
+      })
+      navigator.mediaSession.setActionHandler('stop', () => {
+        window.speechSynthesis?.cancel()
+        autoPlayRef.current = false
+        setIsPlaying(false)
+        isPlayingRef.current = false
+        releaseAudioSession()
+      })
+    }
 
     // cancel() + sofortiges speak() verursacht synthesis-failed auf Android.
     // 50ms Delay reicht und liegt noch im User-Gesture-Aktivierungsfenster.
@@ -126,17 +201,18 @@ function ArticleReader({ articles, onArticleRead, hideReadArticles, fontSizeLeve
         setTimeout(() => setTtsError(null), 5000)
         setIsPlaying(false)
         isPlayingRef.current = false
+        releaseAudioSession()
       }
     }, 50)
-  }, [])
+  }, [releaseAudioSession])
 
   const toggleAudio = useCallback(() => {
     if (isPlayingRef.current) {
       stopReading()
     } else {
-      startReading(currentArticle)
+      startReading(currentArticle, showSummary)
     }
-  }, [currentArticle, startReading, stopReading])
+  }, [currentArticle, showSummary, startReading, stopReading])
 
   // Scroll to top on article change, stop audio wenn kein Autoplay ausstehend
   useEffect(() => {
@@ -158,7 +234,8 @@ function ArticleReader({ articles, onArticleRead, hideReadArticles, fontSizeLeve
   useEffect(() => {
     if (autoPlayRef.current && currentArticle) {
       autoPlayRef.current = false
-      const timer = setTimeout(() => startReading(currentArticle), 300)
+      const useSummary = autoPlaySummaryRef.current
+      const timer = setTimeout(() => startReading(currentArticle, useSummary), 300)
       return () => clearTimeout(timer)
     }
   }, [currentArticle, startReading])
