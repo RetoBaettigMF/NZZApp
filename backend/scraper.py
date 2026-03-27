@@ -67,44 +67,37 @@ class NZZScraper:
         try:
             # Navigate to NZZ
             page.goto('https://www.nzz.ch', timeout=30000)
+            page.wait_for_timeout(2000)
 
-            # Accept cookie consent if it appears
+            # Accept NZZ cookie consent if it appears
             try:
-                page.click('text=Alle Anbieter akzeptieren', timeout=5000)
+                page.click('#cmpwelcomebtnyes', timeout=5000)
+                page.wait_for_timeout(1000)
             except:
                 pass  # No cookie consent dialog
 
             # Click login button (force=True umgeht allfällige Overlays)
             page.locator('text=Anmelden').first.click(force=True, timeout=10000)
+            page.wait_for_timeout(3000)
 
-            # Warte aktiv bis id-eu.piano.io geladen ist (max. 15s)
-            # Hostname-Vergleich statt Substring (buy-eu.piano.io enthält id-eu.piano.io im Query-String)
-            from urllib.parse import urlparse
-            login_frame = None
-            for _ in range(30):
-                page.wait_for_timeout(500)
-                for frame in page.frames:
-                    if urlparse(frame.url).hostname == 'id-eu.piano.io':
-                        login_frame = frame
-                        break
-                if login_frame:
-                    break
+            # Verwende frame_locator für zuverlässigeren Zugriff auf Piano iframe
+            frame_loc = page.frame_locator('iframe[src*="id-eu.piano.io"]')
 
-            if not login_frame:
-                raise Exception("Could not find Piano login iframe (id-eu.piano.io)")
-
-            # Wait for inputs to be ready
-            login_frame.wait_for_selector('input[name="email"]', timeout=10000)
-
-            # Fill credentials in iframe
-            login_frame.fill('input[name="email"]', self.email)
-            login_frame.fill('input[type="password"]', self.password)
+            # Fill credentials via frame_locator (timing-robuster als frame-Objekte)
+            frame_loc.locator('input[name="email"]').fill(self.email)
+            frame_loc.locator('input[type="password"]').fill(self.password)
 
             # Submit form
-            login_frame.click('button[type="submit"]')
+            frame_loc.locator('button[type="submit"]').click()
 
-            # Wait for login to complete (iframe closes)
-            page.wait_for_timeout(5000)
+            # Wait for login to complete (iframe closes, session propagiert)
+            page.wait_for_timeout(6000)
+
+            # Login-Verifikation: Prüfe ob Benutzername in der Navigation erscheint
+            html = page.content()
+            if 'Anmelden' in html and 'Abonnieren' in html:
+                # Möglicherweise noch nicht vollständig eingeloggt, nochmal warten
+                page.wait_for_timeout(3000)
 
             print(f"✓ Browser-Session authentifiziert")
 
@@ -360,14 +353,15 @@ class NZZScraper:
             page = self.browser_page
             page.goto(url, timeout=30000)
 
-            # Wait for article content to load
+            # Cookie Consent auf Artikel-Seiten wegklicken falls vorhanden
             try:
-                page.wait_for_selector('article, main', timeout=5000)
+                page.click('#cmpwelcomebtnyes', timeout=3000)
+                page.wait_for_timeout(500)
             except:
-                pass  # Continue anyway
+                pass
 
-            # Brief wait for dynamic content
-            page.wait_for_timeout(2000)
+            # Wait for article content to load (React/Remix braucht Zeit)
+            page.wait_for_timeout(5000)
 
             # Get page HTML
             html = page.content()
