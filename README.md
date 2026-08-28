@@ -57,10 +57,40 @@ Passwort: 123
 
 ⚠️ **Wichtig:** Ändere das Admin-Passwort nach dem ersten Login!
 
+## 🧪 Tests
+
+End-to-End Smoke-Test, der den kompletten Stack in einem echten Browser durchfährt
+(Auth, ZIP-Download, Markdown-Parsing, Navigation, Datumswechsel, Markieren,
+"Gelesene ausblenden", Admin-Panel, Reload). Der Test startet Backend und
+Dev-Server selbst auf eigenen Ports (8011 / 5183) und legt eigene Test-Artikel an
+— eine laufende Dev-Umgebung wird dadurch nicht gestört, und `users.json` sowie
+`backend/articles/` bleiben unberührt.
+
+```bash
+backend/venv/bin/python tests/smoke_test.py            # headless
+backend/venv/bin/python tests/smoke_test.py --headed   # mit sichtbarem Browser
+backend/venv/bin/python tests/smoke_test.py --keep-logs
+```
+
+Exit-Code 0 = alle Checks grün. Voraussetzungen: `backend/venv` eingerichtet,
+`frontend/node_modules` installiert und die Playwright-Chromium-Binary:
+
+```bash
+backend/venv/bin/python -m playwright install chromium
+sudo apt install -y libasound2t64   # Systembibliothek für Chromium
+```
+
+Linting des Frontends:
+
+```bash
+cd frontend && npm run lint
+```
+
 ## 📚 Dokumentation
 
 - **[AUTH_README.md](backend/AUTH_README.md)** - Detaillierte Auth-Dokumentation
 - **[CHANGELOG.md](CHANGELOG.md)** - Alle Änderungen und Updates
+- **[tests/smoke_test.py](tests/smoke_test.py)** - End-to-End Smoke-Test
 
 ## 🔒 Sicherheit
 

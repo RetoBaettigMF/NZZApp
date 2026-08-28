@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import './DateNavigator.css'
 
 function DateNavigator({ availableDates, availableServerDates, currentDate, onDateChange }) {

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import JSZip from 'jszip'
-import { useAuth } from '../contexts/AuthContext'
+import { useAuth } from '../contexts/auth'
 import './ZipLoader.css'
 
 const API_BASE = '/api'
@@ -11,17 +11,22 @@ function ZipLoader({ onArticlesLoaded, onLoading, onError, onAvailableDatesLoade
     return localStorage.getItem('nzz_last_update') || null
   })
 
-  // Automatisch beim Start laden
+  // Automatisch beim Start laden – bewusst nur einmal beim Mount.
+  // loadLatestArticles liest und setzt lastUpdate; als Dependency würde das
+  // eine Endlos-Nachladeschleife auslösen (der heutige Tag wird absichtlich
+  // immer neu geladen).
   useEffect(() => {
     loadAvailableDates()
     loadLatestArticles()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Exportiere loadArticlesByDate Funktion
+  // Exportiere loadArticlesByDate Funktion – einmalig beim Mount.
   useEffect(() => {
     if (onLoadDateReady) {
       onLoadDateReady(loadArticlesByDate)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const loadAvailableDates = async () => {
@@ -232,7 +237,7 @@ function ZipLoader({ onArticlesLoaded, onLoading, onError, onAvailableDatesLoade
           }
         } else if (line.includes('Original auf NZZ.ch öffnen') || line.includes('URL:')) {
           // Extrahiere URL aus Markdown-Link: [Text](URL)
-          const urlMatch = line.match(/\[.*?\]\((https?:\/\/[^\)]+)\)/)
+          const urlMatch = line.match(/\[.*?\]\((https?:\/\/[^)]+)\)/)
           if (urlMatch) {
             url = urlMatch[1].trim()
           } else if (line.includes('URL:')) {
@@ -265,7 +270,7 @@ function ZipLoader({ onArticlesLoaded, onLoading, onError, onAvailableDatesLoade
         .replace(/^## (.*$)/gim, '<h2>$1</h2>')
         .replace(/^### (.*$)/gim, '<h3>$1</h3>')
         .replace(/^\* (.*$)/gim, '<li>$1</li>')
-        .replace(/^\- (.*$)/gim, '<li>$1</li>')
+        .replace(/^- (.*$)/gim, '<li>$1</li>')
         .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
         .replace(/\*(.*)\*/gim, '<em>$1</em>')
         .replace(/\[([^\]]+)\]\(([^)]+)\)/gim, '<a href="$2" target="_blank">$1</a>')

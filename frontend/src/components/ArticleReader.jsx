@@ -27,8 +27,6 @@ function ArticleReader({ articles, onArticleRead, hideReadArticles, fontSizeLeve
   const wakeLockRef = useRef(null)
 
   const currentArticle = articles[currentIndex]
-  currentIndexRef.current = currentIndex
-  articlesLengthRef.current = articles.length
 
   const getArticleText = (article) => {
     const lines = (article.rawContent || '').split('\n')
@@ -157,7 +155,7 @@ function ArticleReader({ articles, onArticleRead, hideReadArticles, fontSizeLeve
         oscillator.start()
         audioCtxRef.current = ctx
       }
-    } catch (_) { /* kein AudioContext-Support */ }
+    } catch { /* kein AudioContext-Support */ }
 
     // Screen Wake Lock anfordern (verhindert Screen-Off während Vorlesen)
     if ('wakeLock' in navigator && !wakeLockRef.current) {
@@ -225,6 +223,10 @@ function ArticleReader({ articles, onArticleRead, hideReadArticles, fontSizeLeve
     }, 10)
     if (!autoPlayRef.current) {
       window.speechSynthesis?.cancel()
+      // Spiegelt den externen speechSynthesis-Zustand. Absichtlich hier
+      // zentralisiert und nicht in den 5 Navigations-Handlern dupliziert –
+      // nur so bleibt die autoPlayRef-Bedingung an einer Stelle.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsPlaying(false)
       isPlayingRef.current = false
     }
@@ -240,12 +242,12 @@ function ArticleReader({ articles, onArticleRead, hideReadArticles, fontSizeLeve
     }
   }, [currentArticle, startReading])
 
-  // Passe currentIndex an wenn er ungültig wird (z.B. wenn Artikel ausgeblendet werden)
-  useEffect(() => {
-    if (currentIndex >= articles.length && articles.length > 0) {
-      setCurrentIndex(articles.length - 1)
-    }
-  }, [articles.length, currentIndex])
+  // Passe currentIndex an wenn er ungültig wird (z.B. wenn Artikel ausgeblendet
+  // werden). React-empfohlenes Muster: State direkt beim Rendern anpassen statt
+  // im Effect – rendert sofort neu, ohne zwischenzeitlichen Paint.
+  if (currentIndex >= articles.length && articles.length > 0) {
+    setCurrentIndex(articles.length - 1)
+  }
 
   // Speichere aktuelle Leseposition bei jedem Artikel-Wechsel
   useEffect(() => {
@@ -304,7 +306,14 @@ function ArticleReader({ articles, onArticleRead, hideReadArticles, fontSizeLeve
     }
   }, [currentIndex, articles, isAnimating, animateAway, markRead, hideReadArticles, savedArticles])
 
-  handleNextRef.current = handleNext
+  // Refs erst nach dem Render aktualisieren – sie werden ausschliesslich
+  // asynchron gelesen (speakChunk), daher ist der Effect-Zeitpunkt ausreichend
+  // und vermeidet Ref-Schreibzugriffe während des Renders.
+  useEffect(() => {
+    currentIndexRef.current = currentIndex
+    articlesLengthRef.current = articles.length
+    handleNextRef.current = handleNext
+  })
 
   const handlePrevious = useCallback(() => {
     if (isAnimating) return

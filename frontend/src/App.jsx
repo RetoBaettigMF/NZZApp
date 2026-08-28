@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import './App.css'
-import { useAuth } from './contexts/AuthContext'
+import { useAuth } from './contexts/auth'
 import { BUILD } from './version'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import Login from './components/Login'
@@ -11,18 +11,39 @@ import UserMenu from './components/UserMenu'
 import AdminPanel from './components/AdminPanel'
 import HelpModal from './components/HelpModal'
 
+// Vorhandene Artikel-Daten (neueste zuerst) – reine Funktion, damit sie auch
+// im useState-Initializer verwendet werden kann.
+const getAvailableDates = (articles) => [...new Set(articles.map(a => {
+  try {
+    return new Date(a.date).toISOString().split('T')[0]
+  } catch {
+    return new Date().toISOString().split('T')[0]
+  }
+}))].sort((a, b) => new Date(b) - new Date(a))
+
+const loadStoredArticles = () => {
+  const saved = localStorage.getItem('nzz_articles')
+  if (!saved) return []
+  try {
+    return JSON.parse(saved)
+  } catch (e) {
+    console.error('Fehler beim Laden der Artikel:', e)
+    return []
+  }
+}
+
 function App() {
   const { isAuthenticated, loading: authLoading } = useAuth()
   const { needRefresh: [needRefresh], updateServiceWorker } = useRegisterSW()
-  const [updateBanner, setUpdateBanner] = useState(false)
   const [appUpdated] = useState(() => {
     const flag = sessionStorage.getItem('nzz_app_updated')
     if (flag) { sessionStorage.removeItem('nzz_app_updated'); return true }
     return false
   })
   const [showUpdateToast, setShowUpdateToast] = useState(appUpdated)
-  const [articles, setArticles] = useState([])
-  const [currentDate, setCurrentDate] = useState('all')
+  const [articles, setArticles] = useState(loadStoredArticles)
+  // Startet direkt beim neuesten vorhandenen Datum ('all' nur wenn nichts da ist)
+  const [currentDate, setCurrentDate] = useState(() => getAvailableDates(articles)[0] ?? 'all')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState(null)
   const [availableServerDates, setAvailableServerDates] = useState([])
@@ -61,18 +82,6 @@ function App() {
     }
   }, [menuOpen])
 
-  // Lade Artikel aus LocalStorage beim Start
-  useEffect(() => {
-    const saved = localStorage.getItem('nzz_articles')
-    if (saved) {
-      try {
-        setArticles(JSON.parse(saved))
-      } catch (e) {
-        console.error('Fehler beim Laden der Artikel:', e)
-      }
-    }
-  }, [])
-
   // Speichere Artikel in LocalStorage
   useEffect(() => {
     if (articles.length > 0) {
@@ -95,14 +104,15 @@ function App() {
     localStorage.setItem('nzz_saved_articles', JSON.stringify(savedArticles))
   }, [savedArticles])
 
-  // PWA Update-Handling
+  // PWA Update-Handling. Das Banner ist direkt von needRefresh abgeleitet,
+  // der Effect löst nur noch die Seiteneffekte aus.
+  const updateBanner = needRefresh
   useEffect(() => {
     if (needRefresh) {
-      setUpdateBanner(true)
       sessionStorage.setItem('nzz_app_updated', '1')
       setTimeout(() => updateServiceWorker(true), 1500)
     }
-  }, [needRefresh])
+  }, [needRefresh, updateServiceWorker])
 
   useEffect(() => {
     if (showUpdateToast) {
@@ -113,10 +123,9 @@ function App() {
   const handleArticlesLoaded = (newArticles) => {
     setArticles(newArticles)
     setError(null)
-  }
-
-  const handleArticleUpdate = (updatedArticles) => {
-    setArticles(updatedArticles)
+    // Beim ersten Laden auf das neueste Datum springen. Funktionale Form, weil
+    // ZipLoader diesen Handler aus einem Mount-Effect heraus aufruft.
+    setCurrentDate(prev => prev === 'all' ? (getAvailableDates(newArticles)[0] ?? prev) : prev)
   }
 
   const handleArticleRead = (articleId) => {
@@ -157,21 +166,7 @@ function App() {
     }
   }
 
-  // Extrahiere einzigartige Daten aus Artikeln
-  const availableDates = [...new Set(articles.map(a => {
-    try {
-      return new Date(a.date).toISOString().split('T')[0]
-    } catch {
-      return new Date().toISOString().split('T')[0]
-    }
-  }))].sort((a, b) => new Date(b) - new Date(a)) // Neueste zuerst
-
-  // Setze initial auf neuestes Datum
-  useEffect(() => {
-    if (availableDates.length > 0 && currentDate === 'all') {
-      setCurrentDate(availableDates[0])
-    }
-  }, [availableDates.length])
+  const availableDates = useMemo(() => getAvailableDates(articles), [articles])
 
   const filteredArticles = articles.filter(a => {
     // Datums-Filter

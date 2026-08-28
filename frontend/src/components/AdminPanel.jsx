@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { useAuth } from '../contexts/AuthContext'
+import { useState, useEffect, useCallback } from 'react'
+import { useAuth } from '../contexts/auth'
 import './AdminPanel.css'
 
 function AdminPanel({ onClose }) {
@@ -17,11 +17,7 @@ function AdminPanel({ onClose }) {
   // Reset Password
   const [resetPassword, setResetPassword] = useState('')
 
-  useEffect(() => {
-    loadUsers()
-  }, [])
-
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
     try {
       const response = await fetch('/api/users', {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -36,7 +32,11 @@ function AdminPanel({ onClose }) {
       setError(err.message)
       setLoading(false)
     }
-  }
+  }, [token])
+
+  useEffect(() => {
+    loadUsers()
+  }, [loadUsers])
 
   const handleAddUser = async (e) => {
     e.preventDefault()
