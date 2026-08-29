@@ -218,6 +218,29 @@ JS_META: Final = """
 })
 """
 
+# ------------------------------------------------------------------ Abo-Stufe
+
+# NZZ kennt zwei Abostufen; "NZZ Pro" ist die teurere. Pro-Artikel sind sauber
+# ausgezeichnet – im <meta name="mrf:tags"> steht "Content Type:Pro Article"
+# bzw. "Content Type:Standard Article". Gemessen: stimmt 8/8 mit der sichtbaren
+# Teaser-Markierung im Feed überein.
+JS_CONTENT_TYPE: Final = """
+() => {
+  const m = document.querySelector('meta[name="mrf:tags"]')?.content || '';
+  const hit = m.match(/Content Type:([^;]+)/);
+  return hit ? hit[1].trim() : null;
+}
+"""
+
+CONTENT_TYPE_PRO: Final = 'Pro Article'
+CONTENT_TYPE_STANDARD: Final = 'Standard Article'
+
+# Im Feed trägt der Teaser-Kasten die sichtbare Auszeichnung "Pro Artikel".
+# Achtung: im ganzen Seitentext zu suchen liefert Fehltreffer, weil auch freie
+# Artikel Pro-Teaser als Empfehlung einblenden – die Prüfung muss auf den
+# Teaser-Kasten des jeweiligen Links begrenzt bleiben.
+FEED_PRO_LABEL: Final = 'Pro Artikel'
+
 # Cookie-Namen, die eine Piano-/NZZ-Sitzung belegen (Präfix-Vergleich).
 SESSION_COOKIE_HINTS: Final = ('__utp', '__tbc', 'xbc', '_pc_', 'pnespsdk',
                                'nzz_session', 'PIANO', 'piano')

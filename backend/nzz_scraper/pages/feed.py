@@ -9,7 +9,7 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 from ..errors import TransientScrapeError
 from ..logging_setup import get_logger
-from ..models import PageType
+from ..models import FeedEntry, PageType
 from . import locators as L
 from .base import BasePage
 
@@ -34,14 +34,6 @@ class LatestArticlesPage(BasePage):
         raise TransientScrapeError(
             f'Kein einziger Artikel-Link auf {self.page.url} innert {timeout_ms}ms')
 
-    def _hrefs(self) -> list[str]:
-        """Alle hrefs per einem evaluate – kein BeautifulSoup-Reparse pro Runde."""
-        try:
-            return self.page.eval_on_selector_all(
-                'a[href]', 'els => els.map(e => e.getAttribute("href"))') or []
-        except PlaywrightError:
-            return []
-
     @staticmethod
     def is_article_href(href: str | None) -> bool:
         if not href or not L.ARTICLE_HREF.match(href):
@@ -49,11 +41,40 @@ class LatestArticlesPage(BasePage):
         # /information/impressum-ld.148422 passt auf die Regex, ist kein Artikel.
         return not href.startswith(L.NON_ARTICLE_PREFIXES)
 
+    def _entries(self) -> list[dict]:
+        """href plus Pro-Markierung aus dem zugehörigen Teaser-Kasten.
+
+        Die Prüfung ist bewusst auf den Teaser begrenzt: im ganzen Seitentext zu
+        suchen liefert Fehltreffer, weil auch Standard-Artikel Pro-Beiträge als
+        Empfehlung einblenden.
+        """
+        try:
+            return self.page.evaluate("""(label) => {
+                const out = [];
+                document.querySelectorAll('a[href]').forEach(a => {
+                    const href = a.getAttribute('href');
+                    if (!href) return;
+                    const box = a.closest('article') || a.parentElement;
+                    const text = (box && box.innerText) || '';
+                    out.push({href, pro: text.includes(label)});
+                });
+                return out;
+            }""", L.FEED_PRO_LABEL) or []
+        except PlaywrightError:
+            return []
+
+    def _hrefs(self) -> list[str]:
+        return [e['href'] for e in self._entries()]
+
     def _collect(self, into: dict) -> int:
         before = len(into)
-        for href in self._hrefs():
+        for entry in self._entries():
+            href = entry['href']
             if self.is_article_href(href):
-                into.setdefault(urljoin(L.SITE_ROOT, href), None)
+                url = urljoin(L.SITE_ROOT, href)
+                # Einmal als Pro erkannt bleibt Pro: derselbe Artikel kann in
+                # mehreren Kästen auftauchen, nicht alle tragen das Label.
+                into[url] = into.get(url, False) or bool(entry['pro'])
         return len(into) - before
 
     def _load_more(self) -> bool:
@@ -67,14 +88,18 @@ class LatestArticlesPage(BasePage):
         except (PlaywrightTimeoutError, PlaywrightError):
             return False
 
-    def collect_links(self, *, max_links: int = 200, max_rounds: int = 20,
-                      stall_rounds: int = 3) -> list[str]:
+    def collect_links(self, **kwargs) -> list[str]:
+        """Nur die URLs – für Aufrufer, die die Abo-Stufe nicht brauchen."""
+        return [e.url for e in self.collect_entries(**kwargs)]
+
+    def collect_entries(self, *, max_links: int = 200, max_rounds: int = 20,
+                        stall_rounds: int = 3) -> list[FeedEntry]:
         """Sammelt Artikel-URLs über Infinite Scroll.
 
         Der Feed wächst nicht monoton – einzelne Runden liefern nichts, die
         nächste wieder ein Dutzend. stall_rounds ist deshalb > 2.
         """
-        links: dict[str, None] = {}
+        links: dict[str, bool] = {}
         self._collect(links)
         stalled = 0
 
@@ -90,6 +115,8 @@ class LatestArticlesPage(BasePage):
                 log.debug('%d Runden ohne neue Links – Ende', stalled)
                 break
 
-        result = list(links)[:max_links]
-        log.info('%d Artikel-Links gefunden', len(result), extra={'icon': '✓'})
-        return result
+        entries = [FeedEntry(url, is_pro) for url, is_pro in links.items()][:max_links]
+        pro_count = sum(1 for e in entries if e.is_pro)
+        log.info('%d Artikel-Links gefunden (%d davon NZZ Pro)', len(entries), pro_count,
+                 extra={'icon': '✓'})
+        return entries

@@ -20,8 +20,9 @@ from ..pages.base import PageContext
 from ..pages.feed import LatestArticlesPage
 from ..retry import with_retry
 from ..sensors import (BlockingSensor, ContentQualitySensor, PageTypeSensor,
-                       PaywallSensor)
+                       PaywallSensor, ProSensor)
 from .auth_manager import AuthManager
+from .entitlement import EntitlementStore
 from .output import ArticleWriter, create_zip, update_manifest
 from .tracking import TrackingStore
 
@@ -41,12 +42,15 @@ class ScraperRun:
         self.tracking = TrackingStore(cfg.tracking_file)
         self.writer = ArticleWriter(cfg.output_dir)
         self.paywall = PaywallSensor()
+        self.pro = ProSensor()
+        self.entitlement = EntitlementStore(cfg.entitlement_file, cfg.pro_recheck_days)
         self.quality = ContentQualitySensor()
         self.blocking = BlockingSensor()
         self.result = RunResult()
         self._ai = None
         self._ai_failed = False
         self._blocks = 0
+        self._has_pro: bool | None = None
 
     # ------------------------------------------------------------------ AI
 
@@ -80,15 +84,23 @@ class ScraperRun:
             if not state.logged_in and not (self.cfg.allow_anonymous or self.cfg.force_anonymous):
                 raise LoginFailedError('Login konnte nicht verifiziert werden')
 
-            links = self._collect_links(page)
-            self.result.links_found = len(links)
+            self._load_entitlement()
 
-            new_links = [u for u in links if not self.tracking.is_scraped(u)]
-            total_new = len(new_links)
+            entries = self._collect_links(page)
+            self.result.links_found = len(entries)
+
+            fresh = [e for e in entries if not self.tracking.is_scraped(e.url)]
+            fresh = self._drop_unreachable_pro(fresh)
+            # Standard-Artikel zuerst: sie liefern die Vergleichslänge, an der
+            # sich erkennen lässt, ob ein Pro-Artikel nur ein Anriss ist.
+            fresh.sort(key=lambda e: e.is_pro)
+            total_new = len(fresh)
             if limit:
-                new_links = new_links[:limit]
+                fresh = fresh[:limit]
+            fresh = self._ensure_pro_probe(fresh, entries)
+            new_links = [e.url for e in fresh]
             self.result.new_links = len(new_links)
-            log.info('%d Links gefunden, %d neu%s', len(links), total_new,
+            log.info('%d Links gefunden, %d neu%s', len(entries), total_new,
                      f' (auf {limit} begrenzt)' if limit else '')
 
             if not new_links:
@@ -120,12 +132,98 @@ class ScraperRun:
 
     # ------------------------------------------------------------------ Teile
 
-    def _collect_links(self, page) -> list[str]:
+    def _collect_links(self, page):
         feed = LatestArticlesPage(page, self.ctx)
         feed.open(self.cfg.base_url).assert_ready()
         feed.dismiss_overlays()
         self._check_blocked(feed)
-        return feed.collect_links(max_links=self.cfg.max_links)
+        return feed.collect_entries(max_links=self.cfg.max_links)
+
+    def _load_entitlement(self) -> None:
+        """Legt fest, ob NZZ-Pro-Artikel überhaupt erreichbar sind."""
+        if self.cfg.pro_access in ('yes', 'no'):
+            self._has_pro = self.cfg.pro_access == 'yes'
+            log.info('Pro-Zugriff per Konfiguration: %s',
+                     'ja' if self._has_pro else 'nein')
+            return
+
+        state = self.entitlement.load()
+        if self.entitlement.needs_probe:
+            # Der erste Pro-Artikel des Laufs dient als Stichprobe. Das gilt
+            # auch für eine fällige Wiederholung, damit ein Abo-Upgrade
+            # irgendwann auffällt.
+            self._has_pro = None
+            if state.has_pro is None:
+                log.info('Pro-Zugriff noch unbekannt – wird am ersten Pro-Artikel geprüft')
+            else:
+                log.info('Pro-Zugriff wird neu geprüft (letzte Prüfung älter als %d Tage)',
+                         self.cfg.pro_recheck_days)
+        else:
+            self._has_pro = state.has_pro
+            log.info('%s', state.describe())
+
+    def _drop_unreachable_pro(self, entries):
+        """Filtert Pro-Artikel heraus, wenn das Abo sie nicht abdeckt.
+
+        Das passiert vor dem Laden: die Teaser-Markierung im Feed genügt, die
+        Seite muss gar nicht erst geholt werden. Übersprungene Pro-Artikel
+        werden bewusst NICHT getrackt – nach einem Abo-Upgrade sollen sie
+        wieder eingesammelt werden.
+        """
+        if self._has_pro is not False:
+            return entries
+
+        keep = [e for e in entries if not e.is_pro]
+        skipped = len(entries) - len(keep)
+        if skipped:
+            self.result.skipped_pro += skipped
+            log.info('%d NZZ-Pro-Artikel übersprungen (Abo deckt sie nicht ab)', skipped)
+        return keep
+
+    def _ensure_pro_probe(self, batch, entries):
+        """Hängt einen Pro-Artikel an, wenn die Abo-Stufe noch offen ist.
+
+        Ohne das käme die Stichprobe nie zustande: Standard-Artikel stehen
+        vorne, und ein --limit schneidet die Pro-Artikel weg.
+        """
+        if self._has_pro is not None or not batch or not entries:
+            return batch
+        if any(e.is_pro for e in batch):
+            return batch
+        known = {e.url for e in batch}
+        probe = next((e for e in entries
+                      if e.is_pro and e.url not in known
+                      and not self.tracking.is_scraped(e.url)), None)
+        if probe is None:
+            return batch
+        log.info('Hänge einen Pro-Artikel als Stichprobe an: %s', probe.url)
+        return batch + [probe]
+
+    # Ein Pro-Anriss misst rund ein Zehntel eines vollen Artikels
+    # (gemessen: 722 und 1271 Zeichen gegenüber 7107).
+    PRO_STUB_RATIO = 0.4
+    PRO_PROBE_MIN_SAMPLES = 3
+
+    def _probe_pro_access(self, chars: int) -> bool | None:
+        """Ermittelt an einem Pro-Artikel, ob das Abo ihn abdeckt.
+
+        Der PaywallSensor hilft hier nicht: Pro-Artikel werden bereits
+        serverseitig gekürzt ausgeliefert, der Container schrumpft also nicht.
+        Verlässlich ist der Längenvergleich mit den Standard-Artikeln desselben
+        Laufs.
+        """
+        median = self.paywall.median
+        if median is None:
+            log.info('  Pro-Stichprobe verschoben: erst %d/%d Standard-Artikel als '
+                     'Vergleich', self.paywall.samples, self.PRO_PROBE_MIN_SAMPLES)
+            return None
+
+        has_pro = chars >= self.PRO_STUB_RATIO * median
+        log.info('  Pro-Stichprobe: %d Zeichen gegenüber Median %.0f → Pro-Abo %s',
+                 chars, median, 'vorhanden' if has_pro else 'nicht vorhanden')
+        self._has_pro = has_pro
+        self.entitlement.set(has_pro)
+        return has_pro
 
     def _scrape_all(self, session, auth, links: list[str], deadline: float) -> list[Article]:
         articles: list[Article] = []
@@ -181,8 +279,22 @@ class ScraperRun:
         self._check_blocked(article_page)
         article_page.dismiss_overlays()
 
+        # Sicherheitsnetz: die Teaser-Markierung im Feed kann fehlen, das
+        # Meta-Tag auf der Artikelseite ist massgeblich.
+        pro = self.pro.read(article_page, self.ctx)
+        if pro.verdict and self._has_pro is False:
+            self.result.skipped_pro += 1
+            log.info('  Übersprungen (NZZ Pro, Abo deckt es nicht ab)')
+            return None
+
         raw = article_page.extract()
         markdown = html_fragment_to_markdown(raw.html)
+
+        if pro.verdict and self._has_pro is None:
+            # Erster Pro-Artikel des Laufs: Stichprobe für die Abo-Stufe.
+            if self._probe_pro_access(len(markdown)) is not True:
+                self.result.skipped_pro += 1
+                return None
 
         paywall = self.paywall.read(article_page, self.ctx, raw=raw, content_chars=len(markdown))
         if paywall.verdict:
@@ -202,7 +314,10 @@ class ScraperRun:
             self.debug.capture(page, 'low-quality', sensors=[quality, paywall])
             return None
 
-        self.paywall.note_length(len(markdown))
+        # Nur Standard-Artikel bilden die Vergleichslänge – ein Pro-Anriss
+        # würde den Median nach unten ziehen und die Stichprobe verfälschen.
+        if not pro.verdict:
+            self.paywall.note_length(len(markdown))
         return self._build_article(raw, markdown)
 
     def _build_article(self, raw, markdown: str) -> Article:

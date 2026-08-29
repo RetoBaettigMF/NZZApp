@@ -64,6 +64,27 @@ python run_scraper.py --limit 3 --dry-run      # Probelauf ohne zu schreiben
 python run_scraper.py --headed --log-level DEBUG   # Fehlersuche mit sichtbarem Browser
 ```
 
+### NZZ Pro
+
+NZZ hat zwei Abostufen. Deckt das Abo die **NZZ-Pro-Artikel** nicht ab, werden
+sie übersprungen – und zwar schon anhand der Teaser-Markierung im Feed, also
+ohne die Seite überhaupt zu laden.
+
+Die Stufe wird beim ersten Lauf selbst ermittelt (ein Pro-Artikel als
+Stichprobe) und in `backend/.state/nzz_entitlement.json` gemerkt; nach sieben
+Tagen wird neu geprüft, damit ein Upgrade auffällt.
+
+```bash
+python run_scraper.py --pro-access no    # Pro fest ausschliessen (spart die Stichprobe)
+python run_scraper.py --pro-access yes   # Pro-Abo vorhanden
+python run_scraper.py --recheck-pro      # Stufe sofort neu ermitteln
+```
+
+Alternativ per `.env`: `NZZ_PRO_ACCESS=auto|yes|no`, `NZZ_PRO_RECHECK_DAYS=7`.
+
+Übersprungene Pro-Artikel werden **nicht** getrackt – nach einem Upgrade sammelt
+der nächste Lauf sie ein.
+
 Exit-Codes: `0` ok · `1` zu viele Fehler · `2` Login/Konfiguration · `3` von NZZ
 blockiert. `nzz-scraper-sync.sh` wertet sie aus und synchronisiert nur bei `0`.
 

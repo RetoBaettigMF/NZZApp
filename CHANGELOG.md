@@ -27,6 +27,18 @@
 - Falscher Pfad in `nzz-scraper-sync.sh` (`Development` statt `development`).
 
 ### Hinzugefügt
+- **NZZ-Pro-Artikel werden übersprungen, wenn das Abo sie nicht abdeckt.**
+  NZZ hat zwei Abostufen; Pro-Artikel sind über
+  `<meta name="mrf:tags">` (`Content Type:Pro Article`) und über die
+  Teaser-Markierung im Feed erkennbar (geprüft: 8/8 Übereinstimmung). Fehlt
+  das Pro-Abo, werden sie bereits anhand des Feeds aussortiert – die Seite wird
+  gar nicht erst geladen. Ohne das würden sie bei jedem Lauf neu geholt,
+  als Paywall verworfen und mangels Tracking endlos wiederholt.
+  Die Abostufe ermittelt der Scraper selbst (ein Pro-Artikel als Stichprobe,
+  Längenvergleich mit den Standard-Artikeln desselben Laufs) und merkt sie in
+  `backend/.state/nzz_entitlement.json`; nach sieben Tagen prüft er neu, damit
+  ein Upgrade auffällt. Steuerbar über `--pro-access auto|yes|no`,
+  `--recheck-pro` bzw. `NZZ_PRO_ACCESS` und `NZZ_PRO_RECHECK_DAYS`.
 - Live-Smoke-Test `tests/scraper_smoke_test.py`.
 - `python -m nzz_scraper.tools.explore` zum Neuermitteln der Selektoren.
 - Debug-Artefakte (Screenshot, HTML, Sensorwerte) unter `backend/debug/`.

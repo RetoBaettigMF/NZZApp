@@ -82,6 +82,38 @@ Im gekürzten Zustand gibt es **keine** Paywall-Klassennamen. Erkennbar ist er a
 einem sichtbaren **„NZZ abonnieren"**-Button und daran, dass der Text mitten im
 Satz endet.
 
+### C) Zwei Abostufen – NZZ Pro ist sauber ausgezeichnet
+
+NZZ verkauft ein Standard-Abo und ein teureres mit NZZ-Pro-Artikeln. Piano gibt
+die Stufe nicht her (`window.tp.user.getUser()` liefert `null`), aber der
+Artikeltyp steht strukturiert im Kopf der Seite:
+
+```html
+<meta name="mrf:tags" content="Page Type:regular;Editorial Owner:NZZ;
+                               Content Type:Pro Article;Article ID:ld.10021479">
+```
+
+Werte: `Pro Article` bzw. `Standard Article`. Serverseitig gerendert, also
+sofort verfügbar – kein Warten auf Piano nötig.
+
+Im Feed trägt der Teaser-Kasten zusätzlich das sichtbare Label **„Pro Artikel"**.
+Gegenprobe an acht Artikeln: **8/8 Übereinstimmung** zwischen Teaser-Label und
+Meta-Tag. Damit lassen sich Pro-Artikel überspringen, *ohne sie zu laden*.
+
+Zwei Fallstricke:
+
+* Im ganzen Seitentext nach „Pro Artikel" zu suchen erzeugt Fehltreffer –
+  auch Standard-Artikel blenden Pro-Beiträge als Empfehlung ein. Die Prüfung
+  muss auf den Teaser-Kasten des jeweiligen Links begrenzt bleiben
+  (`a.closest('article')`).
+* `span.sr-only` mit dem Text „Pro Artikel" steht aus demselben Grund ebenfalls
+  auf freien Artikeln. Nicht als Marker verwenden.
+
+Die Abostufe selbst wird empirisch ermittelt: der erste Pro-Artikel eines Laufs
+wird geholt; kürzt Piano ihn, fehlt das Pro-Abo. Ergebnis landet in
+`backend/.state/nzz_entitlement.json` und wird nach sieben Tagen neu geprüft,
+damit ein Upgrade nicht dauerhaft unbemerkt bleibt.
+
 ---
 
 ## Weitere Beobachtungen

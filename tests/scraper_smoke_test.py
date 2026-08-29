@@ -43,22 +43,25 @@ from nzz_scraper.config import ScraperConfig                         # noqa: E40
 from nzz_scraper.debug import DebugArtifacts                         # noqa: E402
 from nzz_scraper.extraction.markdown import html_fragment_to_markdown  # noqa: E402
 from nzz_scraper.logging_setup import setup_logging                  # noqa: E402
-from nzz_scraper.models import Article, PageType                     # noqa: E402
+from nzz_scraper.models import Article, FeedEntry, PageType          # noqa: E402
 from nzz_scraper.pages.article import ArticlePage                    # noqa: E402
 from nzz_scraper.pages.base import PageContext                       # noqa: E402
 from nzz_scraper.pages.consent import CookieConsentOverlay           # noqa: E402
 from nzz_scraper.pages.feed import LatestArticlesPage                # noqa: E402
 from nzz_scraper.pages.home import HomePage                          # noqa: E402
 from nzz_scraper.pipeline.auth_manager import AuthManager            # noqa: E402
+from nzz_scraper.pipeline.entitlement import Entitlement, EntitlementStore  # noqa: E402
 from nzz_scraper.pipeline.output import ArticleWriter, create_zip, update_manifest  # noqa: E402
 from nzz_scraper.pipeline.runner import ScraperRun                   # noqa: E402
+from nzz_scraper.pages import locators as L                          # noqa: E402
 from nzz_scraper.sensors import (BlockingSensor, ContentQualitySensor,  # noqa: E402
-                                 PageTypeSensor, PaywallSensor)
+                                 PageTypeSensor, PaywallSensor, ProSensor)
 
 ARTICLE_URL_RE = re.compile(r'^https://www\.nzz\.ch/[\w-]+/[\w-]+\.\d+$')
 
 SECTIONS = ('browser', 'consent', 'pagetype', 'login', 'session', 'relogin',
-            'feed', 'article', 'paywall', 'output', 'tracking', 'debug', 'isolation')
+            'feed', 'article', 'paywall', 'pro', 'output', 'tracking', 'debug',
+            'isolation')
 
 
 # ------------------------------------------------------------------ Gerüst
@@ -355,6 +358,67 @@ def check_paywall(rep, cfg, ctx, links):
                      'unter den ersten 10 Artikeln war keiner hinter der Paywall')
 
 
+def check_pro(rep, cfg, ctx):
+    """NZZ Pro: Erkennung, Abo-Stufe und Aussortieren ohne Laden."""
+    section('NZZ Pro')
+
+    # --- Abo-Speicher (ohne Netz)
+    store = EntitlementStore(cfg.output_dir.parent / 'ent-test.json', recheck_days=7)
+    store.load()
+    rep.check('Abo-Stufe startet unbekannt', store.state.has_pro is None)
+    rep.check('Unbekannte Stufe verlangt eine Stichprobe', store.needs_probe)
+    store.set(False)
+    reloaded = EntitlementStore(store.path, recheck_days=7)
+    reloaded.load()
+    rep.equals('Abo-Stufe übersteht einen Neustart', reloaded.state.has_pro, False)
+    rep.check('Frische Stufe verlangt keine Stichprobe', not reloaded.needs_probe)
+    rep.check('Veraltete Stufe wird neu geprüft',
+              not Entitlement(False, '2020-01-01T00:00:00', 'probe').is_fresh(7))
+
+    # --- Aussortieren ohne Netz
+    run = ScraperRun(cfg)
+    run.tracking.load()
+    entries = [FeedEntry('https://www.nzz.ch/a/x-ld.1', False),
+               FeedEntry('https://www.nzz.ch/pro/y-ld.2', True)]
+    run._has_pro = False
+    kept = run._drop_unreachable_pro(entries)
+    rep.equals('Ohne Pro-Abo bleibt nur der Standard-Artikel',
+               [e.url for e in kept], ['https://www.nzz.ch/a/x-ld.1'])
+    rep.equals('Übersprungene Pro-Artikel werden gezählt', run.result.skipped_pro, 1)
+    run._has_pro = True
+    rep.equals('Mit Pro-Abo bleiben beide',
+               len(run._drop_unreachable_pro(entries)), 2)
+
+    # --- Erkennung an echten Seiten
+    with BrowserSession(cfg) as s:
+        page = s.new_page()
+        feed = LatestArticlesPage(page, ctx)
+        feed.open(cfg.base_url).assert_ready()
+        feed.dismiss_overlays()
+        found = feed.collect_entries(max_links=60, max_rounds=6)
+        pro_entries = [e for e in found if e.is_pro]
+        rep.check('Feed markiert Pro-Artikel', bool(pro_entries),
+                  f'{len(pro_entries)} von {len(found)}')
+
+        sensor = ProSensor()
+        if pro_entries:
+            art = ArticlePage(page, ctx)
+            art.open(pro_entries[0].url).assert_ready()
+            result = sensor.read(art, ctx)
+            rep.check('Meta bestätigt den Pro-Artikel', result.verdict is True,
+                      str(result.extra.get('content_type')))
+        else:
+            rep.skip('Meta bestätigt den Pro-Artikel', 'kein Pro-Artikel im Feed')
+
+        standard = next((e for e in found if not e.is_pro), None)
+        if standard:
+            art = ArticlePage(page, ctx)
+            art.open(standard.url).assert_ready()
+            result = sensor.read(art, ctx)
+            rep.check('Standard-Artikel wird nicht als Pro gemeldet',
+                      result.verdict is False, str(result.extra.get('content_type')))
+
+
 def check_run(rep, cfg):
     section('Vollständiger Lauf und Tracking')
     from dataclasses import replace
@@ -485,6 +549,8 @@ def main():
                 rep.skip('Abschnitt article', 'NZZ_EMAIL/NZZ_PASSWORD nicht gesetzt')
         if 'paywall' in wanted:
             check_paywall(rep, cfg, ctx, links)
+        if 'pro' in wanted:
+            check_pro(rep, cfg, ctx)
         if 'tracking' in wanted:
             if have_creds:
                 check_run(rep, cfg)

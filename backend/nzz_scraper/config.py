@@ -46,6 +46,9 @@ class ScraperConfig:
     allow_anonymous: bool = False
     force_anonymous: bool = False   # gar nicht erst einloggen (Tests)
     use_ai: bool = True
+    # 'auto' = empirisch ermitteln, 'yes'/'no' = fest vorgeben
+    pro_access: str = 'auto'
+    pro_recheck_days: int = 7
     trace: bool = False
 
     nav_timeout_ms: int = 30_000
@@ -61,6 +64,11 @@ class ScraperConfig:
     @property
     def tracking_file(self) -> Path:
         return self.output_dir / 'scraped_articles.json'
+
+    @property
+    def entitlement_file(self) -> Path:
+        """Liegt bei der Session, nicht bei den Artikeln – wird nicht gesynct."""
+        return self.session_file.parent / 'nzz_entitlement.json'
 
     @classmethod
     def from_env(cls, **overrides) -> "ScraperConfig":
@@ -88,6 +96,8 @@ class ScraperConfig:
             device=os.getenv('NZZ_DEVICE', 'Pixel 7'),
             chromium_channel=os.getenv('NZZ_CHROMIUM_CHANNEL') or None,
             headless=_bool_env('NZZ_HEADLESS', True),
+            pro_access=os.getenv('NZZ_PRO_ACCESS', 'auto').strip().lower(),
+            pro_recheck_days=int(os.getenv('NZZ_PRO_RECHECK_DAYS', '7')),
         )
 
         # Pfad-Overrides ebenfalls normalisieren
@@ -106,6 +116,9 @@ class ScraperConfig:
             raise ConfigError(
                 "NZZ_EMAIL/NZZ_PASSWORD fehlen in der .env. Ohne Login liefert NZZ "
                 "nur Paywall-Anrisse – Abbruch. Mit --allow-anonymous trotzdem starten.")
+        if self.pro_access not in ('auto', 'yes', 'no'):
+            raise ConfigError(
+                f"NZZ_PRO_ACCESS muss 'auto', 'yes' oder 'no' sein, ist {self.pro_access!r}")
         if self.max_failure_ratio <= 0 or self.max_failure_ratio > 1:
             raise ConfigError(f"max_failure_ratio muss in (0, 1] liegen, ist {self.max_failure_ratio}")
 

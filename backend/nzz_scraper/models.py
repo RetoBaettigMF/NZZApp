@@ -19,6 +19,14 @@ class PageType(StrEnum):
     UNKNOWN = 'unknown'
 
 
+@dataclass(frozen=True)
+class FeedEntry:
+    """Ein Link aus der Artikelliste samt Abo-Stufe laut Teaser."""
+
+    url: str
+    is_pro: bool = False
+
+
 @dataclass
 class ContentSettle:
     """Grössenverlauf des Artikel-Containers rund um den Piano-Zugriffsentscheid."""
@@ -94,6 +102,7 @@ class RunResult:
     saved: int = 0
     skipped_paywalled: int = 0
     skipped_quality: int = 0
+    skipped_pro: int = 0
     failed: int = 0
     relogins: int = 0
     duration_s: float = 0.0
@@ -106,7 +115,8 @@ class RunResult:
 
     def summary_line(self) -> str:
         return (
-            f"{self.saved} gespeichert · {self.skipped_paywalled} Paywall · "
+            f"{self.saved} gespeichert · {self.skipped_pro} Pro · "
+            f"{self.skipped_paywalled} Paywall · "
             f"{self.skipped_quality} Qualität · {self.failed} Fehler · "
             f"{self.relogins} Re-Logins · {self.duration_s:.0f}s"
         )

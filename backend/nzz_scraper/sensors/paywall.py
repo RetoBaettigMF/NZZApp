@@ -27,9 +27,18 @@ class PaywallSensor:
         if chars > 0:
             self._lengths.append(chars)
 
+    MIN_SAMPLES = 3
+
+    @property
+    def samples(self) -> int:
+        return len(self._lengths)
+
     @property
     def median(self) -> float | None:
-        return statistics.median(self._lengths) if len(self._lengths) >= 3 else None
+        """Median der bisher erfolgreich geholten Artikel, ab drei Messwerten."""
+        if self.samples < self.MIN_SAMPLES:
+            return None
+        return statistics.median(self._lengths)
 
     def read(self, page, ctx, *, raw=None, content_chars: int | None = None) -> SensorResult:
         settle = getattr(raw, 'settle', None)

@@ -31,6 +31,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--no-login', action='store_true',
                    help='Gar nicht einloggen – nur zum Prüfen der Paywall-Erkennung')
     p.add_argument('--no-ai', action='store_true', help='OpenRouter überspringen')
+    p.add_argument('--pro-access', choices=['auto', 'yes', 'no'],
+                   help='NZZ-Pro-Abo vorhanden? Standard: auto (einmal empirisch prüfen)')
+    p.add_argument('--recheck-pro', action='store_true',
+                   help='Gespeicherte Abo-Stufe verwerfen und neu ermitteln')
     p.add_argument('--trace', action='store_true', help='Playwright-Trace aufzeichnen')
     p.add_argument('--log-level', default='INFO',
                    choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'])
@@ -56,6 +60,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         overrides['use_ai'] = False
     if args.trace:
         overrides['trace'] = True
+    if args.pro_access:
+        overrides['pro_access'] = args.pro_access
 
     try:
         cfg = ScraperConfig.from_env(**overrides)
@@ -73,6 +79,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.fresh_login and cfg.session_file.exists():
         cfg.session_file.unlink()
         log.info('Gespeicherte Session verworfen')
+    if args.recheck_pro and cfg.entitlement_file.exists():
+        cfg.entitlement_file.unlink()
+        log.info('Gespeicherte Abo-Stufe verworfen')
 
     try:
         if args.rescrape is not None:

@@ -1,4 +1,5 @@
 """Sensor-Schicht: messbare Aussagen über den Browserzustand."""
+from .access import ProSensor
 from .auth import LoginSensor
 from .blocking import BlockingSensor
 from .consent import ConsentSensor
@@ -9,6 +10,6 @@ from .types import Sensor, SensorResult, Signal, combine, unknown
 
 __all__ = [
     'LoginSensor', 'BlockingSensor', 'ConsentSensor', 'ContentQualitySensor',
-    'PageTypeSensor', 'PaywallSensor', 'Sensor', 'SensorResult', 'Signal',
+    'PageTypeSensor', 'PaywallSensor', 'ProSensor', 'Sensor', 'SensorResult', 'Signal',
     'combine', 'unknown',
 ]
