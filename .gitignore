@@ -32,6 +32,11 @@ env/
 articles/
 *.zip
 
+# Scraper-Laufzeitdaten
+backend/debug/
+backend/.state/
+login_error.png
+
 # IDE
 .vscode/
 .idea/

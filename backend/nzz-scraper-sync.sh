@@ -1,44 +1,36 @@
 #!/bin/bash
-# NZZ Scraper - Lokal ausführen und auf Server kopieren
+# NZZ Scraper - lokal ausführen und die Artefakte auf den Server kopieren.
+set -uo pipefail
 
-LOCAL_DIR="$HOME/Development/NZZApp/backend"
+# Verzeichnis dieses Skripts, nicht ein geratener $HOME-Pfad.
+LOCAL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REMOTE_USER="baettig"
 REMOTE_HOST="baettig.org"
 REMOTE_DIR="/var/www/nzzapp/backend/articles"
 LOG_FILE="$LOCAL_DIR/scraper_log.txt"
 
-# Log-Verzeichnis erstellen
-# mkdir -p "$HOME/.local/log"
+cd "$LOCAL_DIR" || { echo "Verzeichnis $LOCAL_DIR nicht gefunden" >&2; exit 1; }
 
-echo "==========================================" >> "$LOG_FILE"
-echo "NZZ Scraper Sync - $(date)" >> "$LOG_FILE"
-echo "==========================================" >> "$LOG_FILE"
-
-# Scraper ausführen
-cd "$LOCAL_DIR"
+# shellcheck disable=SC1091
 source venv/bin/activate
-python scraper.py >> "$LOG_FILE" 2>&1
+
+# Der Scraper rotiert scraper_log.txt selbst; auf der Konsole nur Warnungen,
+# damit cron nur bei echten Problemen mailt.
+python run_scraper.py --log-level WARNING
 SCRAPER_EXIT=$?
 
-if [ $SCRAPER_EXIT -eq 0 ]; then
-    echo "✓ Scraper erfolgreich" >> "$LOG_FILE"
-    
-    # Neue .zip-Dateien auf Server kopieren
-    rsync -avz --progress "$LOCAL_DIR/articles/"*.zip "$REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/" >> "$LOG_FILE" 2>&1
-    RSYNC_EXIT=$?
-    
-    if [ $RSYNC_EXIT -eq 0 ]; then
-        echo "✓ ZIP-Dateien auf Server kopiert" >> "$LOG_FILE"
-    else
-        echo "✗ Fehler beim Kopieren (Exit: $RSYNC_EXIT)" >> "$LOG_FILE"
-    fi
-    
-    # Auch scraped_articles.json und Manifeste synchronisieren
-    rsync -avz "$LOCAL_DIR/articles/scraped_articles.json" "$REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/" >> "$LOG_FILE" 2>&1
-    rsync -avz "$LOCAL_DIR/articles/"*/manifest.json "$REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/" 2>/dev/null || true
-    
-else
-    echo "✗ Scraper fehlgeschlagen (Exit: $SCRAPER_EXIT)" >> "$LOG_FILE"
-fi
+case $SCRAPER_EXIT in
+  0)
+    rsync -avz "$LOCAL_DIR/articles/"*.zip "$REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/" \
+      && rsync -avz "$LOCAL_DIR/articles/scraped_articles.json" \
+                    "$REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/" \
+      && rsync -avz "$LOCAL_DIR/articles/"*/manifest.json \
+                    "$REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/" 2>/dev/null
+    echo "$(date -Is) sync ok" >> "$LOG_FILE"
+    ;;
+  2) echo "$(date -Is) Login-/Konfigurationsproblem – kein Sync" | tee -a "$LOG_FILE" >&2 ;;
+  3) echo "$(date -Is) von NZZ blockiert – kein Sync, nächsten Lauf abwarten" | tee -a "$LOG_FILE" >&2 ;;
+  *) echo "$(date -Is) Scraper fehlgeschlagen (Exit $SCRAPER_EXIT) – kein Sync" | tee -a "$LOG_FILE" >&2 ;;
+esac
 
-echo "" >> "$LOG_FILE"
+exit $SCRAPER_EXIT

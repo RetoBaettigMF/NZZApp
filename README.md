@@ -48,6 +48,29 @@ npm run dev
 
 Frontend läuft auf: **http://localhost:5173**
 
+## 📰 Scraper
+
+Der Scraper liegt als Paket unter `backend/nzz_scraper/` und fährt einen echten
+Chromium im **Mobilgerät-Profil** (`Pixel 7`), weil die mobilen NZZ-Seiten
+einfacher strukturiert sind. Die Login-Session wird in `backend/.state/`
+zwischengespeichert und nur bei Bedarf erneuert.
+
+```bash
+cd backend
+python run_scraper.py                          # inkrementeller Lauf
+python run_scraper.py --rescrape               # letzte 12h löschen und neu scrapen
+python run_scraper.py --rescrape 24            # letzte 24h
+python run_scraper.py --limit 3 --dry-run      # Probelauf ohne zu schreiben
+python run_scraper.py --headed --log-level DEBUG   # Fehlersuche mit sichtbarem Browser
+```
+
+Exit-Codes: `0` ok · `1` zu viele Fehler · `2` Login/Konfiguration · `3` von NZZ
+blockiert. `nzz-scraper-sync.sh` wertet sie aus und synchronisiert nur bei `0`.
+
+Bei Problemen landen Screenshot, HTML und alle Sensorwerte unter
+`backend/debug/<zeitstempel>-<anlass>/`. Die mobilen Selektoren lassen sich mit
+`python -m nzz_scraper.tools.explore --url <url>` neu ermitteln.
+
 ## 🔐 Standard-Login
 
 \`\`\`
@@ -58,6 +81,24 @@ Passwort: 123
 ⚠️ **Wichtig:** Ändere das Admin-Passwort nach dem ersten Login!
 
 ## 🧪 Tests
+
+### Scraper (live gegen nzz.ch)
+
+Fährt den echten Scraper im Mobilgerät-Profil: Cookie-Consent, Seitentyp-Erkennung,
+Login von null, Login aus gespeicherter Session, Re-Login-Fallback, Feed,
+Artikel-Extraktion, Paywall-Erkennung und die Kompatibilität der Artefakte mit
+Flask und Frontend. Schreibt ausschliesslich in ein temporäres Verzeichnis;
+`backend/articles/` und `backend/.state/` bleiben nachweislich unberührt.
+
+```bash
+backend/venv/bin/python tests/scraper_smoke_test.py
+backend/venv/bin/python tests/scraper_smoke_test.py --headed
+backend/venv/bin/python tests/scraper_smoke_test.py --only output,browser   # ohne Login
+```
+
+Ohne `NZZ_EMAIL`/`NZZ_PASSWORD` werden die Login-Abschnitte übersprungen (⊘).
+
+### Frontend (End-to-End)
 
 End-to-End Smoke-Test, der den kompletten Stack in einem echten Browser durchfährt
 (Auth, ZIP-Download, Markdown-Parsing, Navigation, Datumswechsel, Markieren,
@@ -89,6 +130,7 @@ cd frontend && npm run lint
 ## 📚 Dokumentation
 
 - **[AUTH_README.md](backend/AUTH_README.md)** - Detaillierte Auth-Dokumentation
+- **[nzz_scraper/MOBILE_SELECTORS.md](backend/nzz_scraper/MOBILE_SELECTORS.md)** - Wie die mobilen NZZ-Selektoren ermittelt wurden
 - **[CHANGELOG.md](CHANGELOG.md)** - Alle Änderungen und Updates
 - **[tests/smoke_test.py](tests/smoke_test.py)** - End-to-End Smoke-Test
 

@@ -1,4 +1,14 @@
-# Inkrementelles Scraping - Implementation Complete ✓
+# Inkrementelles Scraping
+
+> **Stand August 2026:** Der Scraper liegt als Paket unter `backend/nzz_scraper/`.
+> Die frühere Einzeldatei `backend/scraper.py` gibt es nicht mehr, und der
+> Aufruf lautet `python run_scraper.py` statt `python scraper.py`.
+> Das hier beschriebene Tracking-Format ist **unverändert** – es wird von
+> `migrate_tracking.py`, `flask_server.py` und dem Frontend gelesen.
+> Neu ist: Artikel hinter der Paywall werden **nicht** gespeichert und **nicht**
+> getrackt, damit sie beim nächsten Lauf erneut versucht werden.
+>
+> Architektur und Sensoren: `backend/nzz_scraper/MOBILE_SELECTORS.md` und README.
 
 ## Was wurde implementiert?
 
@@ -26,7 +36,7 @@ Format:
 
 ### 2. Neue Scraper-Methoden
 
-**In `scraper.py`:**
+**In `nzz_scraper/pipeline/tracking.py` (`TrackingStore`):**
 - `load_tracked_articles()` - Lädt persistente Tracking-Datei
 - `save_tracked_articles()` - Speichert aktualisierte Tracking-Datei
 - `is_article_scraped()` - Prüft ob URL bereits gescrapt wurde
@@ -126,7 +136,7 @@ articles/
 ```bash
 cd /home/reto/Development/NZZApp/backend
 source venv/bin/activate
-python scraper.py
+python run_scraper.py
 ```
 
 **Ausgabe:**
@@ -153,7 +163,7 @@ crontab -e
 
 Beispiel: Alle 2 Stunden scrapen
 ```cron
-0 */2 * * * cd /home/reto/Development/NZZApp/backend && source venv/bin/activate && python scraper.py >> /tmp/nzz_scraper.log 2>&1
+0 */2 * * * cd /home/reto/Development/NZZApp/backend && source venv/bin/activate && python run_scraper.py >> /tmp/nzz_scraper.log 2>&1
 ```
 
 ## Monitoring
