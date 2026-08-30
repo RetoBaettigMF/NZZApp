@@ -92,6 +92,70 @@ Bei Problemen landen Screenshot, HTML und alle Sensorwerte unter
 `backend/debug/<zeitstempel>-<anlass>/`. Die mobilen Selektoren lassen sich mit
 `python -m nzz_scraper.tools.explore --url <url>` neu ermitteln.
 
+### Automatischer Sync alle 30 Minuten (macOS LaunchAgent)
+
+Auf macOS lässt sich `nzz-scraper-sync.sh` per **LaunchAgent** alle 30 Minuten
+automatisch ausführen. Der Agent lädt bei jedem Login (überlebt Reboot); während
+Sleep wird pausiert und ein verpasster Slot direkt nach dem Wake nachgeholt.
+launchd startet pro Label maximal eine Instanz gleichzeitig – überlappende Läufe
+sind damit ausgeschlossen.
+
+Plist anlegen (Pfad anpassen falls das Repo woanders liegt):
+
+```bash
+cat > ~/Library/LaunchAgents/org.baettig.nzz-scraper-sync.plist <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>org.baettig.nzz-scraper-sync</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>-lc</string>
+        <string>/Users/&lt;you&gt;/Development/NZZApp/backend/nzz-scraper-sync.sh</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/&lt;you&gt;/Development/NZZApp/backend</string>
+    <key>StartInterval</key>
+    <integer>1800</integer>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>StandardOutPath</key>
+    <string>/Users/&lt;you&gt;/Development/NZZApp/backend/scraper_sync_stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/&lt;you&gt;/Development/NZZApp/backend/scraper_sync_stderr.log</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+</dict>
+</plist>
+PLIST
+
+plutil -lint ~/Library/LaunchAgents/org.baettig.nzz-scraper-sync.plist
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/org.baettig.nzz-scraper-sync.plist
+```
+
+Status prüfen bzw. sofort einen Lauf triggern:
+
+```bash
+launchctl print gui/$(id -u)/org.baettig.nzz-scraper-sync | grep -E "state|next fire|last exit|run interval"
+launchctl kickstart -k gui/$(id -u)/org.baettig.nzz-scraper-sync
+```
+
+Voraussetzungen: SSH-Key ohne Passphrase (bzw. `ssh-agent` aktiv) für
+`baettig@baettig.org`, `backend/venv` eingerichtet, `.env` gefüllt.
+
+Wieder deaktivieren:
+
+```bash
+launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/org.baettig.nzz-scraper-sync.plist
+rm ~/Library/LaunchAgents/org.baettig.nzz-scraper-sync.plist
+```
+
 ## 🔐 Standard-Login
 
 \`\`\`
