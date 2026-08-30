@@ -9,6 +9,9 @@ REMOTE_HOST="baettig.org"
 REMOTE_DIR="/var/www/nzzapp/backend/articles"
 LOG_FILE="$LOCAL_DIR/scraper_log.txt"
 
+# BSD-date (macOS) kennt `date -Is` nicht — portables ISO-8601-Format nutzen.
+now() { date +"%Y-%m-%dT%H:%M:%S%z"; }
+
 cd "$LOCAL_DIR" || { echo "Verzeichnis $LOCAL_DIR nicht gefunden" >&2; exit 1; }
 
 # shellcheck disable=SC1091
@@ -26,11 +29,11 @@ case $SCRAPER_EXIT in
                     "$REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/" \
       && rsync -avz "$LOCAL_DIR/articles/"*/manifest.json \
                     "$REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/" 2>/dev/null
-    echo "$(date -Is) sync ok" >> "$LOG_FILE"
+    echo "$(now) sync ok" >> "$LOG_FILE"
     ;;
-  2) echo "$(date -Is) Login-/Konfigurationsproblem – kein Sync" | tee -a "$LOG_FILE" >&2 ;;
-  3) echo "$(date -Is) von NZZ blockiert – kein Sync, nächsten Lauf abwarten" | tee -a "$LOG_FILE" >&2 ;;
-  *) echo "$(date -Is) Scraper fehlgeschlagen (Exit $SCRAPER_EXIT) – kein Sync" | tee -a "$LOG_FILE" >&2 ;;
+  2) echo "$(now) Login-/Konfigurationsproblem – kein Sync" | tee -a "$LOG_FILE" >&2 ;;
+  3) echo "$(now) von NZZ blockiert – kein Sync, nächsten Lauf abwarten" | tee -a "$LOG_FILE" >&2 ;;
+  *) echo "$(now) Scraper fehlgeschlagen (Exit $SCRAPER_EXIT) – kein Sync" | tee -a "$LOG_FILE" >&2 ;;
 esac
 
 exit $SCRAPER_EXIT
